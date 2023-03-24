@@ -1,6 +1,8 @@
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import 'package:the_purple_alliance/main.dart';
 import 'widgets.dart';
 import 'data_manager.dart';
 
@@ -32,22 +34,33 @@ class TextWidgetBuilder extends JsonWidgetBuilder {
 }
 
 abstract class SynchronizedBuilder<T extends DataValue> extends JsonWidgetBuilder {
-  late T _dataValue;
+  DataManager? _manager;
+
+  T? get _dataValue {
+    var value = _manager?.values[_key];
+    if (value is T) {
+      return value;
+    }
+    return null;
+  }
+
   late final String _key;
-  SynchronizedBuilder.fromJson(Map<String, dynamic> displayData, dynamic valueData) : super.fromJson(displayData) {
-    _dataValue = DataValue.load(valueData, T);
+  SynchronizedBuilder.fromJson(Map<String, dynamic> displayData) : super.fromJson(displayData) {
     _key = displayData["key"];
   }
 
-  void register(DataManager manager) {
-    manager.values[_key] = _dataValue;
+  void setDataManager(DataManager? manager) {
+    _manager = manager;
+    if (manager != null && !manager.values.containsKey(_key)) {
+      manager.values[_key] = DataValue.load(T);
+    }
   }
 }
 
 class TextFieldWidgetBuilder extends SynchronizedBuilder<TextDataValue> {
   late final String _label;
   double? _padding;
-  TextFieldWidgetBuilder.fromJson(Map<String, dynamic> displayData, dynamic valueData) : super.fromJson(displayData, valueData) {
+  TextFieldWidgetBuilder.fromJson(Map<String, dynamic> displayData) : super.fromJson(displayData) {
     _label = displayData["label"];
     if (displayData.containsKey("padding")) {
       var padding = displayData["padding"];
@@ -61,24 +74,31 @@ class TextFieldWidgetBuilder extends SynchronizedBuilder<TextDataValue> {
   Widget build(BuildContext context) {
     return Padding(
       padding: EdgeInsets.all(_padding ?? 8.0),
-      child: TextFormField(
-        decoration: InputDecoration(
-          border: const UnderlineInputBorder(),
-          labelText: _label,
-        ),
+      child: Consumer<MyAppState>(
+        builder: (context, appState, child) {
+          return TextFormField(
+            key: Key(_key),
+            decoration: InputDecoration(
+              border: const UnderlineInputBorder(),
+              labelText: _label,
+            ),
+            initialValue: _dataValue?.value ?? TextDataValue.getDefault(),
+            onChanged: (value) {
+              _dataValue?.value = value;
+            },
+          );
+        }
       ),
     );
   }
 }
 
 Map<String, JsonWidgetBuilder Function(Map<String, dynamic>)> widgetBuilders = {};
-Map<String, SynchronizedBuilder Function(Map<String, dynamic>, dynamic)> synchronizedBuilders = {};
 
 void initializeBuilders() {
   widgetBuilders.clear();
-  synchronizedBuilders.clear();
   widgetBuilders["text"] = TextWidgetBuilder.fromJson;
-  synchronizedBuilders["text_field"] = TextFieldWidgetBuilder.fromJson;
+  widgetBuilders["text_field"] = TextFieldWidgetBuilder.fromJson;
   initializeValueHolders();
 }
 
@@ -86,6 +106,7 @@ ExperimentBuilder? safeLoadBuilder(String data) {
   try {
     return ExperimentBuilder.fromJson(data);
   } catch (e) {
+    print(e);
     return null;
   }
 }
@@ -106,7 +127,14 @@ JsonWidgetBuilder? loadBuilder(Map<String, dynamic> entry) {
 class ExperimentBuilder {
 
   final List<JsonWidgetBuilder> _builders = [];
-  final DataManager _manager = DataManager();
+  final TeamDataManager teamManager = TeamDataManager();
+  DataManager? _manager;
+
+  DataManager? get manager => _manager;
+
+  int? _currentTeam;
+
+  int? get currentTeam => _currentTeam;
 
   ExperimentBuilder.fromJson(String data) {
     var jdat = jsonDecode(data);
@@ -115,9 +143,9 @@ class ExperimentBuilder {
         var builder = loadBuilder(entry);
         if (builder != null) {
           _builders.add(builder);
-          if (builder is SynchronizedBuilder) {
-            builder.register(_manager);
-          }
+//          if (builder is SynchronizedBuilder) {
+//            builder.setDataManager(manager);
+//          }
         }
       }
     } else {
@@ -125,11 +153,38 @@ class ExperimentBuilder {
     }
   }
 
+  void setTeam(int teamNumber) {
+    _currentTeam = teamNumber;
+    _manager = teamManager.getManager(teamNumber);
+    for (JsonWidgetBuilder builder in _builders) {
+      if (builder is SynchronizedBuilder) {
+        builder.setDataManager(manager);
+        builder._dataValue?.setChangeNotifier(_changeNotifier);
+      }
+    }
+  }
+
   List<Widget> build(BuildContext context) {
-    return [
+    return _currentTeam == null ?
+    [
+      Center(
+        child: SizedBox(
+          child: DisplayCard(
+            text: "No team selected",
+          ),
+        ),
+      )
+    ] :
+    [
       for (JsonWidgetBuilder builder in _builders)
         builder.build(context),
     ];
+  }
+
+  void Function() _changeNotifier = () {};
+
+  void setChangeNotifier(void Function() changeNotifier) {
+    _changeNotifier = changeNotifier;
   }
 }
 
@@ -139,12 +194,14 @@ List<Widget> buildExperiment(BuildContext context, ExperimentBuilder? builder) {
   }
   final theme = Theme.of(context);
   return [
-    DisplayCard(
-        text: "Not loaded",
-        icon: Icon(
-          Icons.error_outline,
-          color: theme.colorScheme.onPrimary,
-        )
+    Center(
+      child: DisplayCard(
+          text: "Not loaded",
+          icon: Icon(
+            Icons.error_outline,
+            color: theme.colorScheme.onPrimary,
+          )
+      ),
     )
   ];
 }

@@ -1,6 +1,8 @@
 import 'package:english_words/english_words.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:the_purple_alliance/data_manager.dart';
+import 'package:the_purple_alliance/widgets.dart';
 
 import 'scouting_layout.dart';
 
@@ -71,6 +73,9 @@ class MyAppState extends ChangeNotifier {
 
   String? _error;
 
+  String username = "";
+  SyncInterval syncInterval = SyncInterval.manual;
+
   bool _setTeamNumber(int teamNumber) {
     if (!locked) {
       _teamNumber = teamNumber;
@@ -118,9 +123,10 @@ class MyAppState extends ChangeNotifier {
     {
       "type": "text_field",
       "label": "A cool form entry",
-      "fieldKey": "test"
+      "key": "test"
     }
     ]''');
+    builder?.setChangeNotifier(notifyListeners);
     notifyListeners();
   }
 
@@ -152,6 +158,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    var appState = context.watch<MyAppState>();
     Widget page;
     switch (selectedIndex) {
       case 0:
@@ -202,7 +209,13 @@ class _MyHomePageState extends State<MyHomePage> {
                     });
                   },
                 ),
-              ),
+              ),/*
+              SizedBox(
+                width: 15,
+                child: Container(
+                  color: Colors.red,
+                ),
+              ),// */
               Expanded(
                 child: Container(
                   color: Theme.of(context).colorScheme.primaryContainer,
@@ -210,6 +223,18 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ),
             ],
+          ),
+          floatingActionButton: FloatingActionButton(
+            onPressed: () {
+              var test_value = appState.builder?.manager?.values["test"];
+              if (test_value is TextDataValue) {
+                test_value.value = "This is a test";
+                test_value.changeNotifer();
+              }
+            },
+            child: Icon(
+              Icons.add_circle_outline,
+            )
           ),
         );
       }
@@ -320,12 +345,14 @@ class SettingsPage extends StatelessWidget {
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
     final theme = Theme.of(context);
+    var genericTextStyle = TextStyle(color: theme.colorScheme.onPrimaryContainer);
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Row(
               children: [
@@ -356,9 +383,10 @@ class SettingsPage extends StatelessWidget {
                           child: Column(
                               children: [
                                 TextFormField(
-                                  decoration: const InputDecoration(
-                                    border: UnderlineInputBorder(),
+                                  decoration: InputDecoration(
+                                    border: const UnderlineInputBorder(),
                                     labelText: "Team Number",
+                                    labelStyle: genericTextStyle,
                                   ),
                                   keyboardType: TextInputType.number,
                                   readOnly: appState.locked,
@@ -377,9 +405,10 @@ class SettingsPage extends StatelessWidget {
                                   },
                                 ),
                                 TextFormField(
-                                  decoration: const InputDecoration(
-                                    border: UnderlineInputBorder(),
+                                  decoration: InputDecoration(
+                                    border: const UnderlineInputBorder(),
                                     labelText: "Server",
+                                    labelStyle: genericTextStyle,
                                   ),
                                   keyboardType: TextInputType.url,
                                   readOnly: appState.locked,
@@ -405,8 +434,39 @@ class SettingsPage extends StatelessWidget {
             ConfigCard(
               theme: theme,
               label: "Username",
+              onChanged: (value) {
+                if (value == "test_set") {
+                  print("yaya!");
+                  var text_value = appState.builder?.manager?.values["test"];
+                  print(appState.builder?.manager?.values);
+                  print(text_value);
+                  if (text_value is TextDataValue) {
+                    text_value.value = "never gonna give you up, never gonna let you down,";
+                    text_value.changeNotifer();
+                  }
+                }
+                appState.username = value;
+              },
               keyBoardType: TextInputType.name,
+              initialValue: appState.username,
             ),
+            SizedBox(height: 10),
+            Card(
+              color: theme.colorScheme.primaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "Sync interval",
+                      style: genericTextStyle,
+                    ),
+                    SyncTimeSelector(theme: theme),
+                  ]
+                )
+              )
+            )
           ],
         ),
       ),
@@ -419,26 +479,35 @@ class ConfigCard extends StatelessWidget {
     super.key,
     required this.theme,
     required this.label,
+    required this.onChanged,
     this.keyBoardType,
+    this.initialValue,
   });
 
   final ThemeData theme;
   final String label;
+  final void Function(String) onChanged;
   final TextInputType? keyBoardType;
+  final String? initialValue;
 
   @override
   Widget build(BuildContext context) {
     return Card(
       color: theme.colorScheme.primaryContainer,
       child: Padding(
-        padding: const EdgeInsets.all(8.0),
-        child: TextFormField(
-          decoration: InputDecoration(
-            border: const UnderlineInputBorder(),
-            labelText: label,
-          ),
-          keyboardType: keyBoardType,
-        )
+          padding: const EdgeInsets.all(8.0),
+          child: TextFormField(
+            decoration: InputDecoration(
+              border: const UnderlineInputBorder(),
+              labelText: label,
+              labelStyle: TextStyle(
+                color: theme.colorScheme.onPrimaryContainer,
+              ),
+            ),
+            keyboardType: keyBoardType,
+            onChanged: onChanged,
+            initialValue: initialValue,
+          )
       ),
     );
   }
