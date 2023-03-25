@@ -167,7 +167,7 @@ class ExperimentBuilder {
   List<Widget> build(BuildContext context) {
     return _currentTeam == null ?
     [
-      Center(
+      const Center(
         child: SizedBox(
           child: DisplayCard(
             text: "No team selected",
@@ -176,6 +176,13 @@ class ExperimentBuilder {
       )
     ] :
     [
+      Center(
+        child: SizedBox(
+          child: DisplayCard(
+            text: "Team $currentTeam"
+          ),
+        ),
+      ),
       for (JsonWidgetBuilder builder in _builders)
         builder.build(context),
     ];

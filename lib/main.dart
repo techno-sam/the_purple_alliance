@@ -76,6 +76,33 @@ class MyAppState extends ChangeNotifier {
   String username = "";
   SyncInterval syncInterval = SyncInterval.manual;
 
+  bool _colorfulTeams = true;
+
+  bool get colorfulTeams => _colorfulTeams;
+
+  set colorfulTeams(bool value) {
+    _colorfulTeams = value;
+    notifyListeners();
+  }
+
+  bool _teamColorReminder = false;
+
+  bool get teamColorReminder => _teamColorReminder;
+
+  set teamColorReminder(bool value) {
+    _teamColorReminder = value;
+    notifyListeners();
+  }
+
+  bool _teamColorBlue = false; // whether the team color reminder is blue or red
+
+  bool get teamColorBlue => _teamColorBlue;
+
+  set teamColorBlue(bool value) {
+    _teamColorBlue = value;
+    notifyListeners();
+  }
+
   bool _setTeamNumber(int teamNumber) {
     if (!locked) {
       _teamNumber = teamNumber;
@@ -168,9 +195,16 @@ class _MyHomePageState extends State<MyHomePage> {
         page = FavoritesPage();
         break;
       case 2:
-        page = ExperimentsPage(); //experiments
+        page = TeamSelectionPage(() {
+          setState(() {
+            selectedIndex = 3;
+          });
+        });
         break;
       case 3:
+        page = ExperimentsPage(); //experiments
+        break;
+      case 4:
         page = SettingsPage(); //settings
         break;
       default:
@@ -183,29 +217,43 @@ class _MyHomePageState extends State<MyHomePage> {
             children: [
               SafeArea(
                 child: NavigationRail(
+                  backgroundColor: appState.teamColorReminder ? (appState.teamColorBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
                   extended: constraints.maxWidth >= 600,
-                  destinations: const [
-                    NavigationRailDestination(
+                  destinations: [
+                    const NavigationRailDestination(
                       icon: Icon(Icons.home),
                       label: Text('Home'),
                     ),
-                    NavigationRailDestination(
+                    const NavigationRailDestination(
                       icon: Icon(Icons.favorite),
                       label: Text('Favorites'),
                     ),
-                    NavigationRailDestination(
+                    const NavigationRailDestination(
+                      icon: Icon(Icons.list),
+                      label: Text('Teams'),
+                    ),
+                    const NavigationRailDestination(
                       icon: Icon(Icons.local_fire_department),
                       label: Text('Experiments'),
                     ),
-                    NavigationRailDestination(
+                    const NavigationRailDestination(
                       icon: Icon(Icons.settings),
                       label: Text('Settings'),
                     ),
+                    if (appState.teamColorReminder)
+                      const NavigationRailDestination(
+                        icon: Icon(Icons.invert_colors),
+                        label: Text('Switch color')
+                      ),
                   ],
                   selectedIndex: selectedIndex,
                   onDestinationSelected: (value) {
                     setState(() {
-                      selectedIndex = value;
+                      if (value == 5) {
+                        appState.teamColorBlue = !appState.teamColorBlue;
+                      } else {
+                        selectedIndex = value;
+                      }
                     });
                   },
                 ),
@@ -316,6 +364,71 @@ class FavoritesPage extends StatelessWidget {
   }
 }
 
+class TeamTile extends StatelessWidget {
+  final int teamNo;
+  final void Function() _viewTeam;
+
+  const TeamTile(
+      this.teamNo,
+      this._viewTeam,
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    var theme = Theme.of(context);
+    var appState = context.watch<MyAppState>();
+    final Color color = appState.colorfulTeams ? Colors.primaries[teamNo % Colors.primaries.length] : theme.colorScheme.tertiaryContainer;
+    return Card(
+      elevation: 5,
+      color: color,
+      child: InkWell(
+        onTap: () {
+          appState.builder?.setTeam(teamNo);
+          _viewTeam();
+        },
+        splashColor: appState.colorfulTeams ? Color.fromARGB(255, 255-color.red, 255-color.green, 255-color.blue) : null,
+        customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
+        child: Center(child: Text(
+          "$teamNo",
+          style: TextStyle(
+            fontSize: 20,
+          )
+        )),
+      ),
+    );
+  }
+}
+
+class TeamSelectionPage extends StatelessWidget {
+
+  TeamSelectionPage(this._viewTeam);
+
+  final void Function() _viewTeam;
+
+  @override
+  Widget build(BuildContext context) {
+    List<int> teams = [
+      for (int i = 1000; i < 1100; i++)
+        i,
+    ];
+    return Padding(
+      padding: const EdgeInsets.all(8.0),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return GridView.builder(
+            itemCount: teams.length,
+            itemBuilder: (context, index) => TeamTile(teams[index], _viewTeam),
+            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 128,
+              childAspectRatio: 2.0,
+            ),
+          );
+        }
+      )
+    );
+  }
+}
+
 class ExperimentsPage extends StatelessWidget {
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "scouting");
@@ -351,8 +464,7 @@ class SettingsPage extends StatelessWidget {
       child: Form(
         key: _formKey,
         autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: ListView(
           children: [
             Row(
               children: [
@@ -463,10 +575,62 @@ class SettingsPage extends StatelessWidget {
                       style: genericTextStyle,
                     ),
                     SyncTimeSelector(theme: theme),
-                  ]
-                )
-              )
-            )
+                  ],
+                ),
+              ),
+            ),
+            SizedBox(height: 10),
+            Card(
+              color: theme.colorScheme.primaryContainer,
+              child: Padding(
+                padding: const EdgeInsets.all(8.0),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 200,
+                          child: Text(
+                            "Colorful Team Buttons",
+                            style: genericTextStyle.copyWith(
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Switch(
+                          value: appState.colorfulTeams,
+                          onChanged: (value) {
+                            appState.colorfulTeams = value;
+                          },
+                        )
+                      ],
+                    ),
+                    SizedBox(height: 10),
+                    Row(
+                      children: [
+                        SizedBox(
+                          width: 200,
+                          child: Text(
+                            "Team Color Reminder",
+                            style: genericTextStyle.copyWith(
+                              fontSize: 16,
+                            ),
+                          ),
+                        ),
+                        SizedBox(width: 10),
+                        Switch(
+                          value: appState.teamColorReminder,
+                          onChanged: (value) {
+                            appState.teamColorReminder = value;
+                          },
+                        )
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
       ),
