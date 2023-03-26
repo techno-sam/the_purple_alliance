@@ -50,6 +50,10 @@ enum SyncInterval {
   final int? interval;
 
   const SyncInterval({required this.description, this.interval});
+
+  static SyncInterval fromName(String name) {
+    return SyncInterval.values.firstWhere((element) => element.name == name, orElse: () => SyncInterval.manual);
+  }
 }
 
 class SyncTimeSelector extends StatelessWidget {

@@ -1,10 +1,14 @@
+import 'dart:convert';
+import 'dart:async';
+import 'dart:io';
+
 import 'package:english_words/english_words.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:the_purple_alliance/data_manager.dart';
 import 'package:the_purple_alliance/widgets.dart';
-
-import 'scouting_layout.dart';
+import 'package:the_purple_alliance/scouting_layout.dart';
 
 void main() {
   initializeBuilders();
@@ -46,7 +50,17 @@ String? _verifyServerUrl(String url) {
 }
 
 class MyAppState extends ChangeNotifier {
+  var __unsavedChanges = false;
+  bool get _unsavedChanges => __unsavedChanges;
+  set _unsavedChanges(bool value) {
+    __unsavedChanges = value;
+    _unsavedChangesBarState?.target?.setState(() {
+      _unsavedChangesBarState?.target?.unsavedChanges = value;
+    });
+  }
   var current = WordPair.random();
+
+  WeakReference<_UnsavedChangesBarState>? _unsavedChangesBarState;
 
   void getNext() {
     current = WordPair.random();
@@ -64,17 +78,144 @@ class MyAppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<String> get _localPath async {
+    final directory = await getApplicationDocumentsDirectory();
+    return directory.path + "/the_purple_alliance";
+  }
+
+  Future<File> get _configFile async {
+    final path = await _localPath;
+    return File('$path/config.json');
+  }
+
+  Future<Map<String, dynamic>> readConfig() async {
+    print("reading config...");
+    try {
+      final file = await _configFile;
+
+      final contents = await file.readAsString();
+
+      return jsonDecode(contents);
+    } catch (e) {
+      print(e);
+      return {};
+    }
+  }
+
+  Future<File?> writeConfig(Map<String, dynamic> data) async {
+    try {
+      final file = await _configFile;
+
+      final contents = jsonEncode(data);
+
+      return file.writeAsString(contents);
+    } catch (e) {
+      return Future.value(null);
+    }
+  }
+
+  Future<File?> saveConfig() {
+    return writeConfig(_config).then(
+        (v) {
+          _unsavedChanges = false;
+          return v;
+        }
+    );
+  }
+
+  Map<String, dynamic> get _config {
+    _localPath.then((v) {
+      print(v);
+    });
+    return {
+      "colorful_teams": colorfulTeams,
+      "team_color_reminder": teamColorReminder,
+      "team_color_blue": teamColorBlue,
+      "sync_interval": syncInterval.name,
+      "connection": {
+        "locked": locked,
+        "team_number": locked ? _teamNumber ?? _teamNumberInProgress : _teamNumberInProgress,
+        "url": locked ? _serverUrl ?? _serverUrlInProgress : _serverUrlInProgress,
+        "username": username,
+      },
+    };
+  }
+
+  set _config(Map<String, dynamic> json_data) {
+    print("Hello");
+    if (json_data["colorful_teams"] is bool) {
+      print("Reading colorful teams ${json_data["colorful_teams"]}");
+      colorfulTeams = json_data["colorful_teams"];
+    }
+    if (json_data["team_color_reminder"] is bool) {
+      teamColorReminder = json_data["team_color_reminder"];
+    }
+    if (json_data["team_color_blue"] is bool) {
+      teamColorBlue = json_data["team_color_blue"];
+    }
+    if (json_data["sync_interval"] is String) {
+      syncInterval = SyncInterval.fromName(json_data["sync_interval"]);
+    }
+    if (json_data["connection"] is Map) {
+      var connection = json_data["connection"];
+      var shouldConnect = false;
+      if (connection["locked"] is bool) {
+        shouldConnect = connection["locked"];
+      }
+      if (connection["team_number"] is int) {
+        _teamNumberInProgress = connection["team_number"];
+      } else {
+        shouldConnect = false;
+      }
+      if (connection["url"] is String) {
+        _serverUrlInProgress = connection["url"];
+      } else {
+        shouldConnect = false;
+      }
+      if (connection["username"] is String) {
+        username = connection["username"];
+      }
+      if (shouldConnect) {
+        locked = false;
+        connect(reconnecting: true);
+        locked = true;
+      }
+    }
+    notifyListeners();
+    _unsavedChanges = false;
+  }
+
   var locked = false;
-  var _teamNumberInProgress = 1234;
-  var _serverUrlInProgress = "example.com";
+  var __teamNumberInProgress = 1234;
+  int get _teamNumberInProgress => __teamNumberInProgress;
+  set _teamNumberInProgress(int value) {
+    _unsavedChanges = true;
+    __teamNumberInProgress = value;
+  }
+  var __serverUrlInProgress = "example.com";
+  String get _serverUrlInProgress => __serverUrlInProgress;
+  set _serverUrlInProgress(String value) {
+    _unsavedChanges = true;
+    __serverUrlInProgress = value;
+  }
   int? _teamNumber;
   String? _serverUrl;
   ExperimentBuilder? builder;
 
   String? _error;
 
-  String username = "";
-  SyncInterval syncInterval = SyncInterval.manual;
+  String _username = "";
+  String get username => _username;
+  set username(String value) {
+    _unsavedChanges = true;
+    _username = value;
+  }
+  SyncInterval _syncInterval = SyncInterval.manual;
+  SyncInterval get syncInterval => _syncInterval;
+  set syncInterval(SyncInterval value) {
+    _unsavedChanges = true;
+    _syncInterval = value;
+  }
 
   bool _colorfulTeams = true;
 
@@ -83,6 +224,7 @@ class MyAppState extends ChangeNotifier {
   set colorfulTeams(bool value) {
     _colorfulTeams = value;
     notifyListeners();
+    _unsavedChanges = true;
   }
 
   bool _teamColorReminder = false;
@@ -92,6 +234,7 @@ class MyAppState extends ChangeNotifier {
   set teamColorReminder(bool value) {
     _teamColorReminder = value;
     notifyListeners();
+    _unsavedChanges = true;
   }
 
   bool _teamColorBlue = false; // whether the team color reminder is blue or red
@@ -101,6 +244,7 @@ class MyAppState extends ChangeNotifier {
   set teamColorBlue(bool value) {
     _teamColorBlue = value;
     notifyListeners();
+    _unsavedChanges = true;
   }
 
   bool _setTeamNumber(int teamNumber) {
@@ -125,7 +269,7 @@ class MyAppState extends ChangeNotifier {
     return true;
   }
 
-  void connect() {
+  void connect({bool reconnecting = false}) {
     bool success1 = _setTeamNumber(_teamNumberInProgress);
     bool success2 = _setServer(_serverUrlInProgress);
     if (success1 && success2) {
@@ -154,6 +298,9 @@ class MyAppState extends ChangeNotifier {
     }
     ]''');
     builder?.setChangeNotifier(notifyListeners);
+    if (!reconnecting) {
+      saveConfig();
+    }
     notifyListeners();
   }
 
@@ -162,6 +309,7 @@ class MyAppState extends ChangeNotifier {
     _teamNumberInProgress = _teamNumber ?? 1234;
     _serverUrlInProgress = _serverUrl ?? "example.com";
     builder = null;
+    saveConfig();
     notifyListeners();
   }
 
@@ -171,6 +319,14 @@ class MyAppState extends ChangeNotifier {
 
   String getDisplayUrl() {
     return _serverUrl ?? _serverUrlInProgress;
+  }
+
+  MyAppState(){
+    readConfig().then((v) {
+      print("Read config: $v");
+      _config = v;
+      print("Set.");
+    });
   }
 }
 
@@ -212,77 +368,92 @@ class _MyHomePageState extends State<MyHomePage> {
     }
     return LayoutBuilder(
       builder: (context, constraints) {
-        return Scaffold(
-          body: Row(
-            children: [
-              SafeArea(
-                child: NavigationRail(
-                  backgroundColor: appState.teamColorReminder ? (appState.teamColorBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
-                  extended: constraints.maxWidth >= 600,
-                  destinations: [
-                    const NavigationRailDestination(
-                      icon: Icon(Icons.home),
-                      label: Text('Home'),
-                    ),
-                    const NavigationRailDestination(
-                      icon: Icon(Icons.favorite),
-                      label: Text('Favorites'),
-                    ),
-                    const NavigationRailDestination(
-                      icon: Icon(Icons.list),
-                      label: Text('Teams'),
-                    ),
-                    const NavigationRailDestination(
-                      icon: Icon(Icons.local_fire_department),
-                      label: Text('Experiments'),
-                    ),
-                    const NavigationRailDestination(
-                      icon: Icon(Icons.settings),
-                      label: Text('Settings'),
-                    ),
-                    if (appState.teamColorReminder)
+        return WillPopScope(
+          onWillPop: () async {
+            var appState = context.watch<MyAppState>();
+            await appState.writeConfig(appState._config);
+            return Future<bool>.value(true);
+          },
+          child: Scaffold(
+            body: Row(
+              children: [
+                SafeArea(
+                  child: NavigationRail(
+                    backgroundColor: appState.teamColorReminder ? (appState.teamColorBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
+                    extended: constraints.maxWidth >= 600,
+                    destinations: [
                       const NavigationRailDestination(
-                        icon: Icon(Icons.invert_colors),
-                        label: Text('Switch color')
+                        icon: Icon(Icons.home),
+                        label: Text('Home'),
                       ),
-                  ],
-                  selectedIndex: selectedIndex,
-                  onDestinationSelected: (value) {
-                    setState(() {
-                      if (value == 5) {
-                        appState.teamColorBlue = !appState.teamColorBlue;
-                      } else {
-                        selectedIndex = value;
-                      }
-                    });
-                  },
+                      const NavigationRailDestination(
+                        icon: Icon(Icons.favorite),
+                        label: Text('Favorites'),
+                      ),
+                      const NavigationRailDestination(
+                        icon: Icon(Icons.list),
+                        label: Text('Teams'),
+                      ),
+                      const NavigationRailDestination(
+                        icon: Icon(Icons.local_fire_department),
+                        label: Text('Experiments'),
+                      ),
+                      const NavigationRailDestination(
+                        icon: Icon(Icons.settings),
+                        label: Text('Settings'),
+                      ),
+                      if (appState.teamColorReminder)
+                        const NavigationRailDestination(
+                          icon: Icon(Icons.invert_colors),
+                          label: Text('Switch color')
+                        ),
+                    ],
+                    selectedIndex: selectedIndex,
+                    onDestinationSelected: (value) {
+                      setState(() {
+                        if (value == 5) {
+                          appState.teamColorBlue = !appState.teamColorBlue;
+                        } else {
+                          if (selectedIndex != value && selectedIndex == 4 && appState._unsavedChanges) { //if we're leaving the settings page, save the config
+                            appState.saveConfig().then((_) {
+                              setState(() {
+                                selectedIndex = value;
+                              });
+                            });
+                          } else {
+                            selectedIndex = value;
+                          }
+                        }
+                      });
+                    },
+                  ),
+                ),/*
+                SizedBox(
+                  width: 15,
+                  child: Container(
+                    color: Colors.red,
+                  ),
+                ),// */
+                Expanded(
+                  child: Container(
+                    color: Theme.of(context).colorScheme.primaryContainer,
+                    child: page,
+                  ),
                 ),
-              ),/*
-              SizedBox(
-                width: 15,
-                child: Container(
-                  color: Colors.red,
-                ),
-              ),// */
-              Expanded(
-                child: Container(
-                  color: Theme.of(context).colorScheme.primaryContainer,
-                  child: page,
-                ),
-              ),
-            ],
-          ),
-          floatingActionButton: FloatingActionButton(
-            onPressed: () {
-              var test_value = appState.builder?.manager?.values["test"];
-              if (test_value is TextDataValue) {
-                test_value.value = "This is a test";
-                test_value.changeNotifer();
-              }
-            },
-            child: Icon(
-              Icons.add_circle_outline,
-            )
+              ],
+            ),
+            floatingActionButton: FloatingActionButton(
+              onPressed: () {
+                var test_value = appState.builder?.manager?.values["test"];
+                if (test_value is TextDataValue) {
+                  test_value.value = "This is a test";
+                  test_value.changeNotifer();
+                }
+              },
+              child: Icon(
+                Icons.add_circle_outline,
+              )
+            ),
           ),
         );
       }
@@ -466,6 +637,7 @@ class SettingsPage extends StatelessWidget {
         autovalidateMode: AutovalidateMode.onUserInteraction,
         child: ListView(
           children: [
+            UnsavedChangesBar(theme: theme, initialValue: () => appState._unsavedChanges),
             Row(
               children: [
                 IconButton(
@@ -635,6 +807,73 @@ class SettingsPage extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+class UnsavedChangesBar extends StatefulWidget {
+  const UnsavedChangesBar({
+    super.key,
+    required this.theme,
+    required this.initialValue,
+  });
+
+  final ThemeData theme;
+  final bool Function() initialValue;
+
+  @override
+  State<UnsavedChangesBar> createState() => _UnsavedChangesBarState(initialValue());
+}
+
+class _UnsavedChangesBarState extends State<UnsavedChangesBar> {
+
+  _UnsavedChangesBarState(this.unsavedChanges);
+
+  bool unsavedChanges;
+
+  @override
+  Widget build(BuildContext context) {
+    var appState = context.watch<MyAppState>();
+    appState._unsavedChangesBarState = WeakReference(this);
+    return unsavedChanges ? Card(
+        color: widget.theme.colorScheme.error,
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Row(
+            children: [
+              Icon(Icons.warning_amber_outlined,
+                  color: widget.theme.colorScheme.onError),
+              SizedBox(width: 10),
+              Text(
+                "Unsaved changes...",
+                style: TextStyle(
+                  color: widget.theme.colorScheme.onError,
+                ),
+              ),
+              const Expanded(child: SizedBox()),
+              ElevatedButton.icon(
+                style: ButtonStyle(
+                  backgroundColor: MaterialStateProperty.all(
+                      widget.theme.primaryColorLight),
+                  visualDensity: VisualDensity.comfortable,
+                ),
+                onPressed: () {
+                  appState.saveConfig();
+                },
+                label: Text(
+                  "Save",
+                  style: TextStyle(
+                    color: widget.theme.primaryColorDark,
+                  ),
+                ),
+                icon: Icon(
+                  Icons.save_outlined,
+                  color: widget.theme.primaryColorDark,
+                ),
+              ),
+            ],
+          ),
+        )
+    ) : SizedBox();
   }
 }
 
