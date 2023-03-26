@@ -80,7 +80,7 @@ class MyAppState extends ChangeNotifier {
 
   Future<String> get _localPath async {
     final directory = await getApplicationDocumentsDirectory();
-    return directory.path + "/the_purple_alliance";
+    return "${directory.path}/the_purple_alliance";
   }
 
   Future<File> get _configFile async {
@@ -141,23 +141,23 @@ class MyAppState extends ChangeNotifier {
     };
   }
 
-  set _config(Map<String, dynamic> json_data) {
+  set _config(Map<String, dynamic> jsonData) {
     print("Hello");
-    if (json_data["colorful_teams"] is bool) {
-      print("Reading colorful teams ${json_data["colorful_teams"]}");
-      colorfulTeams = json_data["colorful_teams"];
+    if (jsonData["colorful_teams"] is bool) {
+      print("Reading colorful teams ${jsonData["colorful_teams"]}");
+      colorfulTeams = jsonData["colorful_teams"];
     }
-    if (json_data["team_color_reminder"] is bool) {
-      teamColorReminder = json_data["team_color_reminder"];
+    if (jsonData["team_color_reminder"] is bool) {
+      teamColorReminder = jsonData["team_color_reminder"];
     }
-    if (json_data["team_color_blue"] is bool) {
-      teamColorBlue = json_data["team_color_blue"];
+    if (jsonData["team_color_blue"] is bool) {
+      teamColorBlue = jsonData["team_color_blue"];
     }
-    if (json_data["sync_interval"] is String) {
-      syncInterval = SyncInterval.fromName(json_data["sync_interval"]);
+    if (jsonData["sync_interval"] is String) {
+      syncInterval = SyncInterval.fromName(jsonData["sync_interval"]);
     }
-    if (json_data["connection"] is Map) {
-      var connection = json_data["connection"];
+    if (jsonData["connection"] is Map) {
+      var connection = jsonData["connection"];
       var shouldConnect = false;
       if (connection["locked"] is bool) {
         shouldConnect = connection["locked"];
@@ -331,6 +331,8 @@ class MyAppState extends ChangeNotifier {
 }
 
 class MyHomePage extends StatefulWidget {
+  const MyHomePage({super.key});
+
   @override
   State<MyHomePage> createState() => _MyHomePageState();
 }
@@ -345,10 +347,10 @@ class _MyHomePageState extends State<MyHomePage> {
     Widget page;
     switch (selectedIndex) {
       case 0:
-        page = GeneratorPage();
+        page = const GeneratorPage();
         break;
       case 1:
-        page = FavoritesPage();
+        page = const FavoritesPage();
         break;
       case 2:
         page = TeamSelectionPage(() {
@@ -450,7 +452,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   test_value.changeNotifer();
                 }
               },
-              child: Icon(
+              child: const Icon(
                 Icons.add_circle_outline,
               )
             ),
@@ -462,6 +464,8 @@ class _MyHomePageState extends State<MyHomePage> {
 }
 
 class GeneratorPage extends StatelessWidget {
+  const GeneratorPage({super.key});
+
   @override
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
@@ -479,7 +483,7 @@ class GeneratorPage extends StatelessWidget {
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           BigCard(pair: pair),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -488,14 +492,14 @@ class GeneratorPage extends StatelessWidget {
                   appState.toggleFavorite();
                 },
                 icon: Icon(icon),
-                label: Text('Like'),
+                label: const Text('Like'),
               ),
-              SizedBox(width: 10),
+              const SizedBox(width: 10),
               ElevatedButton(
                 onPressed: () {
                   appState.getNext();
                 },
-                child: Text('Next'),
+                child: const Text('Next'),
               ),
             ],
           ),
@@ -506,12 +510,14 @@ class GeneratorPage extends StatelessWidget {
 }
 
 class FavoritesPage extends StatelessWidget {
+  const FavoritesPage({super.key});
+
   @override
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
 
     if (appState.favorites.isEmpty) {
-      return Center(
+      return const Center(
           child: Text('No favorites yet.')
       );
     } else {
@@ -525,8 +531,8 @@ class FavoritesPage extends StatelessWidget {
             ),
             for (var favorite in appState.favorites)
               ListTile(
-                title: Text('${favorite.asLowerCase}'),
-                leading: Icon(Icons.favorite),
+                title: Text(favorite.asLowerCase),
+                leading: const Icon(Icons.favorite),
                 iconColor: theme.primaryColor,
               )
           ]
@@ -542,6 +548,7 @@ class TeamTile extends StatelessWidget {
   const TeamTile(
       this.teamNo,
       this._viewTeam,
+      {super.key}
       );
 
   @override
@@ -561,7 +568,7 @@ class TeamTile extends StatelessWidget {
         customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
         child: Center(child: Text(
           "$teamNo",
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 20,
           )
         )),
@@ -572,7 +579,7 @@ class TeamTile extends StatelessWidget {
 
 class TeamSelectionPage extends StatelessWidget {
 
-  TeamSelectionPage(this._viewTeam);
+  const TeamSelectionPage(this._viewTeam, {super.key});
 
   final void Function() _viewTeam;
 
@@ -589,7 +596,7 @@ class TeamSelectionPage extends StatelessWidget {
           return GridView.builder(
             itemCount: teams.length,
             itemBuilder: (context, index) => TeamTile(teams[index], _viewTeam),
-            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 128,
               childAspectRatio: 2.0,
             ),
@@ -604,10 +611,11 @@ class ExperimentsPage extends StatelessWidget {
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "scouting");
 
+  ExperimentsPage({super.key});
+
   @override
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
-    final theme = Theme.of(context);
     return Form(
       key: _formKey,
       child: Padding(
@@ -624,6 +632,8 @@ class ExperimentsPage extends StatelessWidget {
 class SettingsPage extends StatelessWidget {
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "settings");
+
+  SettingsPage({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -656,7 +666,7 @@ class SettingsPage extends StatelessWidget {
                       ? "Unlocking will clear all stored data."
                       : "Connect",
                 ),
-                SizedBox(width: 8),
+                const SizedBox(width: 8),
                 Expanded(
                   child: Card(
                       color: appState.locked ? theme.colorScheme
@@ -714,7 +724,7 @@ class SettingsPage extends StatelessWidget {
                 ),
               ],
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             ConfigCard(
               theme: theme,
               label: "Username",
@@ -734,7 +744,7 @@ class SettingsPage extends StatelessWidget {
               keyBoardType: TextInputType.name,
               initialValue: appState.username,
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             Card(
               color: theme.colorScheme.primaryContainer,
               child: Padding(
@@ -751,7 +761,7 @@ class SettingsPage extends StatelessWidget {
                 ),
               ),
             ),
-            SizedBox(height: 10),
+            const SizedBox(height: 10),
             Card(
               color: theme.colorScheme.primaryContainer,
               child: Padding(
@@ -769,7 +779,7 @@ class SettingsPage extends StatelessWidget {
                             ),
                           ),
                         ),
-                        SizedBox(width: 10),
+                        const SizedBox(width: 10),
                         Switch(
                           value: appState.colorfulTeams,
                           onChanged: (value) {
@@ -778,7 +788,7 @@ class SettingsPage extends StatelessWidget {
                         )
                       ],
                     ),
-                    SizedBox(height: 10),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         SizedBox(
@@ -790,7 +800,7 @@ class SettingsPage extends StatelessWidget {
                             ),
                           ),
                         ),
-                        SizedBox(width: 10),
+                        const SizedBox(width: 10),
                         Switch(
                           value: appState.teamColorReminder,
                           onChanged: (value) {
@@ -842,7 +852,7 @@ class _UnsavedChangesBarState extends State<UnsavedChangesBar> {
             children: [
               Icon(Icons.warning_amber_outlined,
                   color: widget.theme.colorScheme.onError),
-              SizedBox(width: 10),
+              const SizedBox(width: 10),
               Text(
                 "Unsaved changes...",
                 style: TextStyle(
@@ -873,7 +883,7 @@ class _UnsavedChangesBarState extends State<UnsavedChangesBar> {
             ],
           ),
         )
-    ) : SizedBox();
+    ) : const SizedBox();
   }
 }
 
