@@ -12,18 +12,21 @@ import 'package:the_purple_alliance/scouting_layout.dart';
 
 void main() {
   initializeBuilders();
-  runApp(const MyApp());
+  runApp(MyApp());
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  MyApp({super.key});
+
+  final _scaffoldKey = GlobalKey<ScaffoldMessengerState>();
 
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-        create: (context) => MyAppState(),
+        create: (context) => MyAppState(_scaffoldKey),
         child: MaterialApp(
+          scaffoldMessengerKey: _scaffoldKey,
           title: 'Namer App',
           theme: ThemeData(
             useMaterial3: true,
@@ -88,30 +91,57 @@ class MyAppState extends ChangeNotifier {
     return File('$path/config.json');
   }
 
-  Future<Map<String, dynamic>> readConfig() async {
-    print("reading config...");
+  Future<File> get _dataFile async {
+    final path = await _localPath;
+    return File('$path/data.json');
+  }
+
+  Future<File> get _schemeFile async {
+    final path = await _localPath;
+    return File('$path/scheme.json');
+  }
+
+  Future<Object?> readJsonFile(Future<File> file) async {
     try {
-      final file = await _configFile;
-
-      final contents = await file.readAsString();
-
+      File f = await file;
+      print("reading $f");
+      final contents = await f.readAsString();
+      print("contents: $contents");
       return jsonDecode(contents);
     } catch (e) {
       print(e);
+      return null;
+    }
+  }
+
+  Future<File?> writeJsonFile(Future<File> file, Object? data) async {
+    try {
+      final f = await file;
+      String contents;
+      if (data != null) {
+        contents = jsonEncode(data);
+      } else {
+        contents = "";
+      }
+      return f.writeAsString(contents);
+    } catch (e) {
+      print(e);
+      return Future.value(null);
+    }
+  }
+
+  Future<Map<String, dynamic>> readConfig() async {
+    print("reading config...");
+    var config = await readJsonFile(_configFile);
+    if (config is Map<String, dynamic>) {
+      return config;
+    } else {
       return {};
     }
   }
 
   Future<File?> writeConfig(Map<String, dynamic> data) async {
-    try {
-      final file = await _configFile;
-
-      final contents = jsonEncode(data);
-
-      return file.writeAsString(contents);
-    } catch (e) {
-      return Future.value(null);
-    }
+    return await writeJsonFile(_configFile, data);
   }
 
   Future<File?> saveConfig() {
@@ -141,7 +171,7 @@ class MyAppState extends ChangeNotifier {
     };
   }
 
-  set _config(Map<String, dynamic> jsonData) {
+  _setConfig(Map<String, dynamic> jsonData) async {
     print("Hello");
     if (jsonData["colorful_teams"] is bool) {
       print("Reading colorful teams ${jsonData["colorful_teams"]}");
@@ -177,7 +207,7 @@ class MyAppState extends ChangeNotifier {
       }
       if (shouldConnect) {
         locked = false;
-        connect(reconnecting: true);
+        await connect(reconnecting: true);
         locked = true;
       }
     }
@@ -269,7 +299,58 @@ class MyAppState extends ChangeNotifier {
     return true;
   }
 
-  void connect({bool reconnecting = false}) {
+  Future<Map<String, dynamic>?> get _previousData async {
+    var previousData = await readJsonFile(_dataFile);
+    if (previousData is Map<String, dynamic>) {
+      return previousData;
+    } else {
+      return null;
+    }
+  }
+
+  Future<File?> _setPreviousData(Map<String, dynamic>? data) async {
+    return await writeJsonFile(_dataFile, data ?? {});
+  }
+
+  Future<List<dynamic>?> get _cachedScheme async {
+    var cachedScheme = await readJsonFile(_schemeFile);
+    if (cachedScheme is List<dynamic>) {
+      return cachedScheme;
+    } else {
+      return null;
+    }
+  }
+
+  Future<File?> _setCachedScheme(List<dynamic>? data) async {
+    return await writeJsonFile(_schemeFile, data);
+  }
+
+  Future<List<dynamic>> getScheme() async {
+    print("Fetching scheme...");
+    return [
+      {
+        "type": "text",
+        "label": "A cool label",
+        "padding": 8.0
+      },
+      {
+        "type": "text",
+        "label": "Another cool label"
+      },
+      {
+        "type": "text_field",
+        "label": "A cool form entry",
+        "key": "test"
+      },
+      {
+        "type": "text",
+        "label": "A totally different label",
+        "padding": 20.0
+      }
+    ];
+  }
+
+  Future<void> connect({bool reconnecting = false}) async {
     bool success1 = _setTeamNumber(_teamNumberInProgress);
     bool success2 = _setServer(_serverUrlInProgress);
     if (success1 && success2) {
@@ -281,36 +362,44 @@ class MyAppState extends ChangeNotifier {
       _serverUrl = null;
     }
     initializeBuilders();
-    builder = safeLoadBuilder(r'''[
-    {
-      "type": "text",
-      "label": "A cool label",
-      "padding": 8.0
-    },
-    {
-      "type": "text",
-      "label": "Another cool label"
-    },
-    {
-      "type": "text_field",
-      "label": "A cool form entry",
-      "key": "test"
+    List<dynamic> scheme;
+    if (reconnecting) {
+      var cached = await _cachedScheme;
+      if (cached != null) {
+        scheme = cached;
+      } else {
+        scheme = await getScheme();
+        _setCachedScheme(scheme);
+      }
+    } else {
+      scheme = await getScheme();
+      _setCachedScheme(scheme);
     }
-    ]''');
+    builder = safeLoadBuilder(scheme);
     builder?.setChangeNotifier(notifyListeners);
+    await _previousData.then((v) {
+      if (v != null) {
+        builder?.initializeValues(v.keys);
+        builder?.teamManager.load(v, true);
+      }
+    });
     if (!reconnecting) {
-      saveConfig();
+      await saveConfig();
     }
+    await runSynchronization();
     notifyListeners();
   }
 
-  void unlock() {
-    locked = false;
+  Future<void> unlock() async {
     _teamNumberInProgress = _teamNumber ?? 1234;
     _serverUrlInProgress = _serverUrl ?? "example.com";
+    Future<File?> future = _setPreviousData(builder?.teamManager.save());
     builder = null;
-    saveConfig();
-    notifyListeners();
+    await saveConfig();
+    await future.then((_) {
+      locked = false;
+      notifyListeners();
+    });
   }
 
   int getDisplayTeamNumber() {
@@ -321,10 +410,61 @@ class MyAppState extends ChangeNotifier {
     return _serverUrl ?? _serverUrlInProgress;
   }
 
-  MyAppState(){
-    readConfig().then((v) {
+  int _minutesSinceLastSync = 0;
+  bool _noSync = false;
+
+  late Timer asyncTimer;
+
+  bool _currentlySaving = false;
+  late Timer autoSaveTimer;
+
+  Future<void> runSynchronization() async {
+    if (_noSync) {
+      print("Already synchronizing...");
+      return;
+    }
+    WordPair pair = WordPair.random();
+    print("Synchronizing... !!! ${_minutesSinceLastSync} ${pair.asLowerCase}");
+    _noSync = true;
+    await Future.delayed(const Duration(seconds: 2), () {
+      print(pair.asLowerCase);
+    });
+    scaffoldKey.currentState?.showSnackBar(const SnackBar(
+      content: Text("Synced data with server"),
+    ));
+    _minutesSinceLastSync = 0;
+    _noSync = false;
+  }
+
+  final GlobalKey<ScaffoldMessengerState> scaffoldKey;
+
+  MyAppState(this.scaffoldKey) {
+    asyncTimer = Timer.periodic(Duration(seconds: 1), (timer) async { //FIXME: change delay to minutes, not seconds
+      _minutesSinceLastSync++;
+      if (!_noSync && _minutesSinceLastSync >= (_syncInterval.interval ?? _minutesSinceLastSync+1)) { //if the interval is null, it will not sync
+        await runSynchronization();
+      }
+    });
+    autoSaveTimer = Timer.periodic(Duration(seconds: 10), (timer) async {
+      if (!_currentlySaving && builder != null) {
+        while (_noSync) { // wait for sync to finish, to ensure that correct data is saved
+          print("Waiting for end of sync...");
+          await Future.delayed(const Duration(seconds: 1));
+        }
+        _noSync = true;
+        _currentlySaving = true;
+        await _setPreviousData(builder!.teamManager.save());
+        print("Saved...");
+        /*scaffoldKey.currentState?.showSnackBar(SnackBar(
+          content: const Text("Saved!"),
+        ));*/
+        _currentlySaving = false;
+        _noSync = false;
+      }
+    });
+    readConfig().then((v) async {
       print("Read config: $v");
-      _config = v;
+      await _setConfig(v);
       print("Set.");
     });
   }
@@ -369,14 +509,8 @@ class _MyHomePageState extends State<MyHomePage> {
         throw UnimplementedError("No widget for $selectedIndex");
     }
     return LayoutBuilder(
-      builder: (context, constraints) {
-        return WillPopScope(
-          onWillPop: () async {
-            var appState = context.watch<MyAppState>();
-            await appState.writeConfig(appState._config);
-            return Future<bool>.value(true);
-          },
-          child: Scaffold(
+        builder: (context, constraints) {
+          return Scaffold(
             body: Row(
               children: [
                 SafeArea(
@@ -406,8 +540,8 @@ class _MyHomePageState extends State<MyHomePage> {
                       ),
                       if (appState.teamColorReminder)
                         const NavigationRailDestination(
-                          icon: Icon(Icons.invert_colors),
-                          label: Text('Switch color')
+                            icon: Icon(Icons.invert_colors),
+                            label: Text('Switch color')
                         ),
                     ],
                     selectedIndex: selectedIndex,
@@ -429,36 +563,32 @@ class _MyHomePageState extends State<MyHomePage> {
                       });
                     },
                   ),
-                ),/*
-                SizedBox(
-                  width: 15,
-                  child: Container(
-                    color: Colors.red,
-                  ),
-                ),// */
+                ), /*
+              SizedBox(
+                width: 15,
+                child: Container(
+                  color: Colors.red,
+                ),
+              ),// */
                 Expanded(
                   child: Container(
-                    color: Theme.of(context).colorScheme.primaryContainer,
+                    color: Theme
+                        .of(context)
+                        .colorScheme
+                        .primaryContainer,
                     child: page,
                   ),
                 ),
               ],
             ),
             floatingActionButton: FloatingActionButton(
-              onPressed: () {
-                var test_value = appState.builder?.manager?.values["test"];
-                if (test_value is TextDataValue) {
-                  test_value.value = "This is a test";
-                  test_value.changeNotifer();
-                }
-              },
-              child: const Icon(
-                Icons.add_circle_outline,
-              )
+                onPressed: appState.runSynchronization,
+                child: const Icon(
+                  Icons.sync_alt,
+                )
             ),
-          ),
-        );
-      }
+          );
+        }
     );
   }
 }
@@ -585,10 +715,8 @@ class TeamSelectionPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    List<int> teams = [
-      for (int i = 1000; i < 1100; i++)
-        i,
-    ];
+    var appState = context.watch<MyAppState>();
+    List<int> teams = appState.builder?.teamManager.managers.keys.toList() ?? [];
     return Padding(
       padding: const EdgeInsets.all(8.0),
       child: LayoutBuilder(
@@ -651,11 +779,11 @@ class SettingsPage extends StatelessWidget {
             Row(
               children: [
                 IconButton(
-                  onPressed: () {
+                  onPressed: () async {
                     if (appState.locked) {
-                      appState.unlock();
+                      await appState.unlock();
                     } else if (_formKey.currentState!.validate()) {
-                      appState.connect();
+                      await appState.connect();
                     }
                   },
                   icon: Icon(
@@ -736,7 +864,7 @@ class SettingsPage extends StatelessWidget {
                   print(text_value);
                   if (text_value is TextDataValue) {
                     text_value.value = "never gonna give you up, never gonna let you down,";
-                    text_value.changeNotifer();
+                    text_value.changeNotifier();
                   }
                 }
                 appState.username = value;

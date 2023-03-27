@@ -102,7 +102,7 @@ void initializeBuilders() {
   initializeValueHolders();
 }
 
-ExperimentBuilder? safeLoadBuilder(String data) {
+ExperimentBuilder? safeLoadBuilder(List<dynamic> data) {
   try {
     return ExperimentBuilder.fromJson(data);
   } catch (e) {
@@ -136,20 +136,15 @@ class ExperimentBuilder {
 
   int? get currentTeam => _currentTeam;
 
-  ExperimentBuilder.fromJson(String data) {
-    var jdat = jsonDecode(data);
-    if (jdat is List<dynamic>) {
-      for (Map<String, dynamic> entry in jdat) {
-        var builder = loadBuilder(entry);
-        if (builder != null) {
-          _builders.add(builder);
+  ExperimentBuilder.fromJson(List<dynamic> data) {
+    for (Map<String, dynamic> entry in data) {
+      var builder = loadBuilder(entry);
+      if (builder != null) {
+        _builders.add(builder);
 //          if (builder is SynchronizedBuilder) {
 //            builder.setDataManager(manager);
 //          }
-        }
       }
-    } else {
-      throw "Invalid Json type $jdat (type: ${jdat.runtimeType})";
     }
   }
 
@@ -158,9 +153,36 @@ class ExperimentBuilder {
     _manager = teamManager.getManager(teamNumber);
     for (JsonWidgetBuilder builder in _builders) {
       if (builder is SynchronizedBuilder) {
-        builder.setDataManager(manager);
+        builder.setDataManager(_manager);
         builder._dataValue?.setChangeNotifier(_changeNotifier);
       }
+    }
+  }
+
+  void initializeTeam(int team) {
+    var previousTeam = _currentTeam;
+    setTeam(team);
+    if (previousTeam != null) {
+      setTeam(previousTeam);
+    } else {
+      _currentTeam = null;
+      _manager = null;
+    }
+  }
+
+  void initializeValues(Iterable<String> teams) {
+    var previousTeam = _currentTeam;
+    for (String team in teams) {
+      var parsedTeam = int.tryParse(team);
+      if (parsedTeam != null) {
+        setTeam(parsedTeam);
+      }
+    }
+    if (previousTeam != null) {
+      setTeam(previousTeam);
+    } else {
+      _currentTeam = null;
+      _manager = null;
     }
   }
 

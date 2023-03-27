@@ -1,13 +1,18 @@
-final Map<Type, DataValue Function()> valueTypes = {};
+final Map<Type, DataValue Function()> _valueTypes = {};
+
+int _generateTimestamp() {
+  return DateTime.now().toUtc().millisecondsSinceEpoch;
+}
 
 abstract class DataValue {
-  int? _lastEdited;
-  void Function() changeNotifer = () {};
+  int _lastEdited = -1;
+  bool get _localChanges => _lastEdited != -1;
+  void Function() changeNotifier = () {};
   void fromJson(dynamic data);
   
   static dynamic load(Type t) {
-    if (valueTypes.containsKey(t)) {
-      return valueTypes[t]!();
+    if (_valueTypes.containsKey(t)) {
+      return _valueTypes[t]!();
     } else {
       throw "Type $t is not registered";
     }
@@ -16,15 +21,15 @@ abstract class DataValue {
   dynamic toJson();
 
   void reset() {
-    _lastEdited = null;
+    _lastEdited = -1;
   }
 
   void markChange() {
-    _lastEdited = DateTime.now().toUtc().millisecondsSinceEpoch;
+    _lastEdited = _generateTimestamp();
   }
 
   void setChangeNotifier(void Function() changeNotifier) {
-    changeNotifer = changeNotifier;
+    this.changeNotifier = changeNotifier;
   }
 }
 
@@ -62,18 +67,35 @@ class TextDataValue extends DataValue {
 }
 
 void initializeValueHolders() {
-  valueTypes.clear();
-  valueTypes[TextDataValue] = TextDataValue.new;
+  _valueTypes.clear();
+  _valueTypes[TextDataValue] = TextDataValue.new;
 }
 
 class DataManager {
   final Map<String, DataValue> values = {};
 
-  void load(Map<String, dynamic>? data) {
+  void load(Map<String, dynamic>? data, bool fromDisk) {
     if (data != null) {
       for (MapEntry<String, DataValue> entry in values.entries) {
         if (data.containsKey(entry.key)) {
-          entry.value.fromJson(data[entry.key]);
+          var entryData = data[entry.key];
+          if (entryData is Map<String, dynamic> && entryData.containsKey("value")) {
+            entry.value.fromJson(entryData["value"]);
+            if (entryData.containsKey("timestamp")) {
+              var timestamp = entryData["timestamp"];
+              if (timestamp is int) {
+                if (timestamp > entry.value._lastEdited || fromDisk) {
+                  entry.value._lastEdited = entryData["timestamp"];
+                }
+              } else if (fromDisk) {
+                entry.value._lastEdited = _generateTimestamp();
+              }
+            } else {
+              entry.value._lastEdited = fromDisk ? _generateTimestamp() : -1;
+            }
+          } else {
+            entry.value.reset();
+          }
         } else {
           entry.value.reset();
         }
@@ -88,7 +110,23 @@ class DataManager {
   Map<String, dynamic> save() {
     Map<String, dynamic> data = {};
     for (MapEntry<String, DataValue> entry in values.entries) {
-      data[entry.key] = entry.value.toJson();
+      data[entry.key] = {
+        "value": entry.value.toJson(),
+        "timestamp": entry.value._lastEdited,
+      };
+    }
+    return data;
+  }
+
+  Map<String, dynamic> saveNetworkDeltas() {
+    Map<String, dynamic> data = {};
+    for (MapEntry<String, DataValue> entry in values.entries) {
+      if (entry.value._localChanges) {
+        data[entry.key] = {
+          "value": entry.value.toJson(),
+          "timestamp": entry.value._lastEdited,
+        };
+      }
     }
     return data;
   }
@@ -107,14 +145,13 @@ class TeamDataManager {
     }
   }
 
-  void load(Map<String, dynamic>? data) {
+  void load(Map<String, dynamic>? data, bool fromDisk) {
     if (data != null) {
       for (MapEntry<String, dynamic> entry in data.entries) {
         var teamNumber = int.tryParse(entry.key);
         if (teamNumber != null && (entry.value == null || entry.value is Map<String, dynamic>)) {
-          var dataManager = DataManager();
-          dataManager.load(entry.value);
-          managers[teamNumber] = dataManager;
+          var dataManager = managers.putIfAbsent(teamNumber, DataManager.new);
+          dataManager.load(entry.value, fromDisk);
         }
       }
     } else {
@@ -126,6 +163,17 @@ class TeamDataManager {
     Map<String, dynamic> data = {};
     for (MapEntry<int, DataManager> entry in managers.entries) {
       data["${entry.key}"] = entry.value.save();
+    }
+    return data;
+  }
+
+  Map<String, dynamic> saveNetworkDeltas() {
+    Map<String, dynamic> data = {};
+    for (MapEntry<int, DataManager> entry in managers.entries) {
+      var deltas = entry.value.saveNetworkDeltas();
+      if (deltas.isNotEmpty) {
+        data["${entry.key}"] = deltas;
+      }
     }
     return data;
   }
