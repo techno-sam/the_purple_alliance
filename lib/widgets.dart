@@ -1,5 +1,3 @@
-import 'dart:ui';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
@@ -29,7 +27,7 @@ class DisplayCard extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             if (icon != null) Center(child: icon),
-            if (icon != null) SizedBox(width: 8),
+            if (icon != null) const SizedBox(width: 8),
             Text(
               text,
               style: style,
@@ -79,7 +77,7 @@ class TappableDisplayCard extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             children: [
               if (icon != null) Center(child: icon),
-              if (icon != null) SizedBox(width: 8),
+              if (icon != null) const SizedBox(width: 8),
               Text(
                 text,
                 style: style,

@@ -5,11 +5,8 @@ import 'dart:io';
 import 'package:english_words/english_words.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:http/http.dart' as http;
-import 'package:http_auth/http_auth.dart' as http_auth;
 
 import 'package:the_purple_alliance/data_manager.dart';
 import 'package:the_purple_alliance/widgets.dart';
@@ -44,7 +41,7 @@ class MyApp extends StatelessWidget {
               seedColor: Colors.purple,
             ),
           ),
-          home: MyHomePage(),
+          home: const MyHomePage(),
         )
     );
   }
@@ -56,7 +53,7 @@ String? _verifyServerUrl(String url) {
   if (tmp == null) {
     return "Failed to parse url";
   }
-  if (false && !tmp.isScheme("https")) { //just don't verify scheme temporarily
+  if (!tmp.isScheme("https")) { //just don't verify scheme temporarily
     return "Invalid scheme for server: ${tmp.scheme.isEmpty ? "[Blank]" : tmp.scheme}. Must be 'https'.";
   }
   return null;
@@ -432,7 +429,7 @@ class MyAppState extends ChangeNotifier {
 
   Future<void> clearAllData() async {
     while (_noSync || _currentlySaving) {
-      await Future.delayed(Duration(milliseconds: 100));
+      await Future.delayed(const Duration(milliseconds: 100));
       print("Waiting for sync or save to be completed");
     }
     _noSync = true;
@@ -608,7 +605,7 @@ class MyAppState extends ChangeNotifier {
       return;
     }
     WordPair pair = WordPair.random();
-    print("Synchronizing... !!! ${_minutesSinceLastSync} ${pair.asLowerCase}");
+    print("Synchronizing... !!! $_minutesSinceLastSync ${pair.asLowerCase}");
     _noSync = true;
     /*******************/
     /* Begin Protected */
@@ -682,16 +679,16 @@ class MyAppState extends ChangeNotifier {
 
   MyAppState(this.scaffoldKey) {
     _noSync = true;
-    asyncTimer = Timer.periodic(Duration(seconds: 1), (timer) async { //FIXME: change delay to minutes, not seconds
+    asyncTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
       _minutesSinceLastSync++;
       if (!_noSync && _minutesSinceLastSync >= (_syncInterval.interval ?? _minutesSinceLastSync+1)) { //if the interval is null, it will not sync
         await runSynchronization();
       }
     });
-    autoSaveTimer = Timer.periodic(Duration(seconds: 10), (timer) async {
+    autoSaveTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       await runSave();
     });
-    checkTimer = Timer.periodic(Duration(seconds: 10), (timer) async {
+    checkTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       if (_currentlyChecking) {
         return;
       }
@@ -1061,18 +1058,18 @@ class TeamSelectionPage extends StatelessWidget {
                                   context: context,
                                   builder: (context) {
                                     return AlertDialog(
-                                      title: Text("Confirm team"),
+                                      title: const Text("Confirm team"),
                                       content: Text("Do you want to add team $teamNum?\nThis cannot be undone."),
                                       actions: [
                                         TextButton(
-                                          child: Text("Cancel"),
+                                          child: const Text("Cancel"),
                                           onPressed: () {
                                             Navigator.of(context).pop();
                                             _entryKey.currentState!.reset();
                                           },
                                         ),
                                         TextButton(
-                                          child: Text("Continue"),
+                                          child: const Text("Continue"),
                                           onPressed: () {
                                             Navigator.of(context).pop();
                                             print("Continuing with $teamNum");
@@ -1236,16 +1233,6 @@ class SettingsPage extends StatelessWidget {
               theme: theme,
               label: "Username",
               onChanged: (value) {
-                if (value == "test_set") {
-                  print("yaya!");
-                  var text_value = appState.builder?.manager?.values["test"];
-                  print(appState.builder?.manager?.values);
-                  print(text_value);
-                  if (text_value is TextDataValue) {
-                    text_value.value = "never gonna give you up, never gonna let you down,";
-                    text_value.changeNotifier();
-                  }
-                }
                 appState.username = value;
               },
               keyBoardType: TextInputType.name,
