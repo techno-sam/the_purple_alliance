@@ -73,6 +73,7 @@ void initializeValueHolders() {
 
 class DataManager {
   final Map<String, DataValue> values = {};
+  bool initialized = false;
 
   void load(Map<String, dynamic>? data, bool fromDisk) {
     if (data != null) {
@@ -80,17 +81,20 @@ class DataManager {
         if (data.containsKey(entry.key)) {
           var entryData = data[entry.key];
           if (entryData is Map<String, dynamic> && entryData.containsKey("value")) {
-            entry.value.fromJson(entryData["value"]);
             if (entryData.containsKey("timestamp")) {
               var timestamp = entryData["timestamp"];
               if (timestamp is int) {
                 if (timestamp > entry.value._lastEdited || fromDisk) {
-                  entry.value._lastEdited = entryData["timestamp"];
+                  entry.value.fromJson(entryData["value"]);
+                  entry.value._lastEdited = fromDisk ? entryData["timestamp"] : -1;
                 }
               } else if (fromDisk) {
+                print("Invalid timestamp: $timestamp");
+                entry.value.fromJson(entryData["value"]);
                 entry.value._lastEdited = _generateTimestamp();
               }
             } else {
+              entry.value.fromJson(entryData["value"]);
               entry.value._lastEdited = fromDisk ? _generateTimestamp() : -1;
             }
           } else {
@@ -134,6 +138,9 @@ class DataManager {
 
 class TeamDataManager {
   final Map<int, DataManager> managers = {};
+  final void Function(DataManager) initializeManager;
+
+  TeamDataManager(this.initializeManager);
 
   DataManager getManager(int teamNumber) {
     if (managers.containsKey(teamNumber) && managers[teamNumber] != null) {
@@ -151,6 +158,10 @@ class TeamDataManager {
         var teamNumber = int.tryParse(entry.key);
         if (teamNumber != null && (entry.value == null || entry.value is Map<String, dynamic>)) {
           var dataManager = managers.putIfAbsent(teamNumber, DataManager.new);
+          if (!dataManager.initialized) {
+            initializeManager(dataManager);
+            dataManager.initialized = true;
+          }
           dataManager.load(entry.value, fromDisk);
         }
       }

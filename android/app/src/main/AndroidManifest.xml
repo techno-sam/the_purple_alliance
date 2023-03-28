@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.team1661.the_purple_alliance">
-   <application
+    <!-- Required to fetch data from the internet. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <application
         android:label="the_purple_alliance"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">

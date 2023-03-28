@@ -3,8 +3,8 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
-import 'widgets.dart';
-import 'data_manager.dart';
+import 'package:the_purple_alliance/widgets.dart';
+import 'package:the_purple_alliance/data_manager.dart';
 
 abstract class JsonWidgetBuilder {
   JsonWidgetBuilder.fromJson(Map<String, dynamic> displayData);
@@ -52,6 +52,12 @@ abstract class SynchronizedBuilder<T extends DataValue> extends JsonWidgetBuilde
   void setDataManager(DataManager? manager) {
     _manager = manager;
     if (manager != null && !manager.values.containsKey(_key)) {
+      manager.values[_key] = DataValue.load(T);
+    }
+  }
+
+  void initDataManager(DataManager manager) {
+    if (!manager.values.containsKey(_key)) {
       manager.values[_key] = DataValue.load(T);
     }
   }
@@ -127,7 +133,7 @@ JsonWidgetBuilder? loadBuilder(Map<String, dynamic> entry) {
 class ExperimentBuilder {
 
   final List<JsonWidgetBuilder> _builders = [];
-  final TeamDataManager teamManager = TeamDataManager();
+  late final TeamDataManager teamManager;
   DataManager? _manager;
 
   DataManager? get manager => _manager;
@@ -137,6 +143,13 @@ class ExperimentBuilder {
   int? get currentTeam => _currentTeam;
 
   ExperimentBuilder.fromJson(List<dynamic> data) {
+    teamManager = TeamDataManager((m) {
+      for (JsonWidgetBuilder builder in _builders) {
+        if (builder is SynchronizedBuilder) {
+          builder.initDataManager(m);
+        }
+      }
+    });
     for (Map<String, dynamic> entry in data) {
       var builder = loadBuilder(entry);
       if (builder != null) {
@@ -157,6 +170,7 @@ class ExperimentBuilder {
         builder._dataValue?.setChangeNotifier(_changeNotifier);
       }
     }
+    _manager!.initialized = true;
   }
 
   void initializeTeam(int team) {
@@ -186,7 +200,7 @@ class ExperimentBuilder {
     }
   }
 
-  List<Widget> build(BuildContext context) {
+  List<Widget> build(BuildContext context, void Function() goToTeamSelectionPage) {
     return _currentTeam == null ?
     [
       const Center(
@@ -200,8 +214,12 @@ class ExperimentBuilder {
     [
       Center(
         child: SizedBox(
-          child: DisplayCard(
-            text: "Team $currentTeam"
+          child: TappableDisplayCard(
+            text: "Team $currentTeam",
+            onTap: () async {
+              await Future.delayed(const Duration(milliseconds: 250));
+              goToTeamSelectionPage();
+            },
           ),
         ),
       ),
@@ -217,9 +235,9 @@ class ExperimentBuilder {
   }
 }
 
-List<Widget> buildExperiment(BuildContext context, ExperimentBuilder? builder) {
+List<Widget> buildExperiment(BuildContext context, ExperimentBuilder? builder, void Function() goToTeamSelectionPage) {
   if (builder != null) {
-    return builder.build(context);
+    return builder.build(context, goToTeamSelectionPage);
   }
   final theme = Theme.of(context);
   return [

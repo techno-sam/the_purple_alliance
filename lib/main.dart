@@ -3,15 +3,25 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:english_words/english_words.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
+import 'package:http_auth/http_auth.dart' as http_auth;
+
 import 'package:the_purple_alliance/data_manager.dart';
 import 'package:the_purple_alliance/widgets.dart';
 import 'package:the_purple_alliance/scouting_layout.dart';
+import 'package:the_purple_alliance/network.dart' as network;
 
 void main() {
   initializeBuilders();
+  if (kDebugMode) {
+    print("Enabling debug http overrides");
+    HttpOverrides.global = network.DevHttpOverrides();
+  }
   runApp(MyApp());
 }
 
@@ -46,8 +56,8 @@ String? _verifyServerUrl(String url) {
   if (tmp == null) {
     return "Failed to parse url";
   }
-  if (tmp.scheme != "" && !tmp.isScheme("https")) {
-    return "Invalid scheme for server: ${tmp.scheme}";
+  if (false && !tmp.isScheme("https")) { //just don't verify scheme temporarily
+    return "Invalid scheme for server: ${tmp.scheme.isEmpty ? "[Blank]" : tmp.scheme}. Must be 'https'.";
   }
   return null;
 }
@@ -99,6 +109,11 @@ class MyAppState extends ChangeNotifier {
   Future<File> get _schemeFile async {
     final path = await _localPath;
     return File('$path/scheme.json');
+  }
+  
+  Future<File> get _cachedServerMetaFile async {
+    final path = await _localPath;
+    return File('$path/server_meta.json');
   }
 
   Future<Object?> readJsonFile(Future<File> file) async {
@@ -167,6 +182,7 @@ class MyAppState extends ChangeNotifier {
         "team_number": locked ? _teamNumber ?? _teamNumberInProgress : _teamNumberInProgress,
         "url": locked ? _serverUrl ?? _serverUrlInProgress : _serverUrlInProgress,
         "username": username,
+        "password": __password,
       },
     };
   }
@@ -205,10 +221,12 @@ class MyAppState extends ChangeNotifier {
       if (connection["username"] is String) {
         username = connection["username"];
       }
+      if (connection["password"] is String) {
+        __password = connection["password"];
+      }
       if (shouldConnect) {
         locked = false;
         await connect(reconnecting: true);
-        locked = true;
       }
     }
     notifyListeners();
@@ -240,6 +258,18 @@ class MyAppState extends ChangeNotifier {
     _unsavedChanges = true;
     _username = value;
   }
+
+  String __password = "";
+  String get _password => __password;
+  set _password(String value) {
+    if (locked) {
+      print("Attempted password set while locked!");
+      return;
+    }
+    _unsavedChanges = true;
+    __password = value;
+  }
+
   SyncInterval _syncInterval = SyncInterval.manual;
   SyncInterval get syncInterval => _syncInterval;
   set syncInterval(SyncInterval value) {
@@ -324,10 +354,28 @@ class MyAppState extends ChangeNotifier {
   Future<File?> _setCachedScheme(List<dynamic>? data) async {
     return await writeJsonFile(_schemeFile, data);
   }
+  
+  Future<File?> _setCachedServerMeta(Map<String, dynamic>? data) async {
+    return await writeJsonFile(_cachedServerMetaFile, data);
+  }
+  
+  Future<Map<String, dynamic>?> get _cachedServerMeta async {
+    var cachedServerMeta = await readJsonFile(_cachedServerMetaFile);
+    if (cachedServerMeta is Map<String, dynamic>) {
+      return cachedServerMeta;
+    } else {
+      return null;
+    }
+  }
+  
+  Future<Map<String, dynamic>> getServerMeta() async {
+    return await compute(network.getServerMeta, httpClient);
+  }
 
   Future<List<dynamic>> getScheme() async {
     print("Fetching scheme...");
-    return [
+    return await compute(network.getScheme, httpClient);
+    /*return [
       {
         "type": "text",
         "label": "A cool label",
@@ -347,7 +395,59 @@ class MyAppState extends ChangeNotifier {
         "label": "A totally different label",
         "padding": 20.0
       }
-    ];
+    ];*/
+  }
+
+  network.Connection get httpClient {
+    return network.Connection(_serverUrl ?? "https://example.com", username, _password);
+  }
+
+  bool checkedCompetition = false; // keep track of whether we've checked what competition we are at yet. if we haven't checked yet, we don't want to send bad data.
+  bool _currentlyChecking = false;
+
+  Future<bool> checkCompetition() async {
+    if (checkedCompetition) {
+      return true;
+    }
+    if (_currentlyChecking) {
+      return checkedCompetition;
+    }
+    _currentlyChecking = true;
+    if (await network.testAuthorizedConnection(httpClient)) {
+      var cachedMeta = await _cachedServerMeta;
+      var serverMeta = await getServerMeta();
+      if (serverMeta["competition"] != cachedMeta?["competition"]) {
+        print("Competition changed, clearing cache");
+        var scheme = await getScheme();
+        await _setCachedScheme(scheme);
+        builder = ExperimentBuilder.fromJson(scheme);
+        await _setCachedServerMeta(serverMeta);
+        await runSynchronization();
+      }
+      checkedCompetition = true;
+    }
+    _currentlyChecking = false;
+    return checkedCompetition;
+  }
+
+  Future<void> clearAllData() async {
+    while (_noSync || _currentlySaving) {
+      await Future.delayed(Duration(milliseconds: 100));
+      print("Waiting for sync or save to be completed");
+    }
+    _noSync = true;
+    _currentlySaving = true;
+    builder = null;
+    var scheme = await _cachedScheme;
+    if (scheme == null) {
+      scheme = await getScheme();
+      _setCachedScheme(scheme);
+    }
+    builder = safeLoadBuilder(scheme);
+    builder?.setChangeNotifier(notifyListeners);
+    _noSync = false;
+    _currentlySaving = false;
+    await runSynchronization();
   }
 
   Future<void> connect({bool reconnecting = false}) async {
@@ -355,18 +455,69 @@ class MyAppState extends ChangeNotifier {
     bool success2 = _setServer(_serverUrlInProgress);
     if (success1 && success2) {
       locked = true;
-      print("Connected with team_number: $_teamNumber, url: $_serverUrl");
+      print("Connecting with team_number: $_teamNumber, url: $_serverUrl");
     } else {
       print("Failed to connect ($_error)");
       _teamNumber = null;
       _serverUrl = null;
+      notifyListeners();
+      return;
     }
+    bool serverFound = await network.testUnauthorizedConnection(_serverUrl ?? "https://example.com");
+    if (!reconnecting) { // first time we connect, ensure we have a proper connection
+      bool serverAuthorized = await network.testAuthorizedConnection(httpClient);
+      if (serverFound && serverAuthorized) {
+        print("Server found and authorized");
+        scaffoldKey.currentState?.showSnackBar(const SnackBar(
+          content: Text("Connected to server"),
+        ));
+      } else if (serverFound) {
+        print("Server found but not authorized");
+        scaffoldKey.currentState?.showSnackBar(const SnackBar(
+          content: Text("Invalid credentials"),
+        ));
+        locked = false;
+        _teamNumber = null;
+        _serverUrl = null;
+        notifyListeners();
+        return;
+      } else {
+        print("Server not found");
+        scaffoldKey.currentState?.showSnackBar(const SnackBar(
+          content: Text("Server not found"),
+        ));
+        locked = false;
+        _teamNumber = null;
+        _serverUrl = null;
+        notifyListeners();
+        return;
+      }
+    }
+    print("initializing connection");
     initializeBuilders();
+    Map<String, dynamic>? cachedServerMeta = await _cachedServerMeta;
+    Map<String, dynamic>? remoteServerMeta;
+    if (serverFound) {
+      remoteServerMeta = await getServerMeta();
+    }
+
     List<dynamic> scheme;
     if (reconnecting) {
       var cached = await _cachedScheme;
       if (cached != null) {
-        scheme = cached;
+        bool needsNewScheme = true;
+        if (!serverFound) { // if we haven't found the server, we can't get a new scheme - and server meta will be inaccurate anyway
+          needsNewScheme = false;
+        } else if (cachedServerMeta != null && cachedServerMeta.containsKey("scheme_version") && remoteServerMeta!.containsKey("scheme_version")) {
+          needsNewScheme = remoteServerMeta["scheme_version"] != cachedServerMeta["scheme_version"];
+        }
+        if (needsNewScheme) {
+          print("Scheme version mismatch, fetching new scheme...");
+          scheme = await getScheme();
+          _setCachedScheme(scheme);
+        } else {
+          scheme = cached;
+        }
       } else {
         scheme = await getScheme();
         _setCachedScheme(scheme);
@@ -377,12 +528,28 @@ class MyAppState extends ChangeNotifier {
     }
     builder = safeLoadBuilder(scheme);
     builder?.setChangeNotifier(notifyListeners);
-    await _previousData.then((v) {
-      if (v != null) {
-        builder?.initializeValues(v.keys);
-        builder?.teamManager.load(v, true);
-      }
-    });
+    bool atDifferentCompetition = true;
+    if (!serverFound) { // if we haven't found the server, we can't know if we're at a different competition - so don't clear stuff
+      atDifferentCompetition = false;
+    } else if (cachedServerMeta != null && cachedServerMeta.containsKey("competition") && remoteServerMeta!.containsKey("competition")) {
+      atDifferentCompetition = remoteServerMeta["competition"] != cachedServerMeta["competition"];
+      checkedCompetition = true;
+    } else {
+      checkedCompetition = true;
+    }
+    if (!atDifferentCompetition) {
+      await _previousData.then((v) {
+        if (v != null) {
+          builder?.initializeValues(v.keys);
+          builder?.teamManager.load(v, true);
+        }
+      });
+    } else {
+      print("At different competition, clearing previous data...");
+    }
+    if (checkedCompetition) {
+      await _setCachedServerMeta(remoteServerMeta);
+    }
     if (!reconnecting) {
       await saveConfig();
     }
@@ -395,11 +562,11 @@ class MyAppState extends ChangeNotifier {
     _serverUrlInProgress = _serverUrl ?? "example.com";
     Future<File?> future = _setPreviousData(builder?.teamManager.save());
     builder = null;
-    await saveConfig();
     await future.then((_) {
       locked = false;
       notifyListeners();
     });
+    await saveConfig();
   }
 
   int getDisplayTeamNumber() {
@@ -418,27 +585,103 @@ class MyAppState extends ChangeNotifier {
   bool _currentlySaving = false;
   late Timer autoSaveTimer;
 
+  late Timer checkTimer;
+
   Future<void> runSynchronization() async {
     if (_noSync) {
       print("Already synchronizing...");
       return;
     }
+    if (builder == null) {
+      print("No point in synchronizing non-existent data!");
+      return;
+    }
+    if (!await checkCompetition()) {
+      print("Connection not yet initialized, can't sync");
+      return;
+    }
+    if (!await network.testAuthorizedConnection(httpClient)) {
+      print("Not authorized or not connected, can't sync");
+      scaffoldKey.currentState?.showSnackBar(const SnackBar(
+        content: Text("Not authorized or not connected to server, can't sync"),
+      ));
+      return;
+    }
     WordPair pair = WordPair.random();
     print("Synchronizing... !!! ${_minutesSinceLastSync} ${pair.asLowerCase}");
     _noSync = true;
-    await Future.delayed(const Duration(seconds: 2), () {
+    /*******************/
+    /* Begin Protected */
+    /*******************/
+    try {
+      Map<String, dynamic> toServer = builder!.teamManager.saveNetworkDeltas();
+      await network.sendDeltas(httpClient, toServer);
+      Map<String, dynamic>? fromServer = await network.getTeamData(httpClient);
+      builder!.teamManager.load(fromServer, false);
+      scaffoldKey.currentState?.showSnackBar(const SnackBar(
+        content: Text("Synced data with server"),
+      ));
       print(pair.asLowerCase);
-    });
-    scaffoldKey.currentState?.showSnackBar(const SnackBar(
-      content: Text("Synced data with server"),
-    ));
+    } catch (e) {
+      print("Error while synchronizing: $e");
+      scaffoldKey.currentState?.showSnackBar(SnackBar(
+        content: const Text("Error while synchronizing"),
+        action: SnackBarAction(
+          label: "Info",
+          onPressed: () {
+            showDialog(
+              context: scaffoldKey.currentContext!,
+              builder: (context) {
+                return AlertDialog(
+                  title: const Text("Error while synchronizing"),
+                  content: Text('$e'),
+                  actions: [
+                    TextButton(
+                      child: const Text("OK"),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                    ),
+                  ],
+                );
+              },
+            );
+          },
+        )
+      ));
+    }
+    /*****************/
+    /* End Protected */
+    /*****************/
     _minutesSinceLastSync = 0;
     _noSync = false;
+    notifyListeners();
+  }
+
+  Future<void> runSave({bool manual=false}) async {
+    if (!_currentlySaving && builder != null) {
+      while (_noSync) { // wait for sync to finish, to ensure that correct data is saved
+        print("Waiting for end of sync...");
+        await Future.delayed(const Duration(seconds: 1));
+      }
+      _noSync = true;
+      _currentlySaving = true;
+      await _setPreviousData(builder!.teamManager.save());
+      print("Saved...");
+      if (manual) {
+        scaffoldKey.currentState?.showSnackBar(const SnackBar(
+          content: Text("Saved!"),
+        ));
+      }
+      _currentlySaving = false;
+      _noSync = false;
+    }
   }
 
   final GlobalKey<ScaffoldMessengerState> scaffoldKey;
 
   MyAppState(this.scaffoldKey) {
+    _noSync = true;
     asyncTimer = Timer.periodic(Duration(seconds: 1), (timer) async { //FIXME: change delay to minutes, not seconds
       _minutesSinceLastSync++;
       if (!_noSync && _minutesSinceLastSync >= (_syncInterval.interval ?? _minutesSinceLastSync+1)) { //if the interval is null, it will not sync
@@ -446,26 +689,21 @@ class MyAppState extends ChangeNotifier {
       }
     });
     autoSaveTimer = Timer.periodic(Duration(seconds: 10), (timer) async {
-      if (!_currentlySaving && builder != null) {
-        while (_noSync) { // wait for sync to finish, to ensure that correct data is saved
-          print("Waiting for end of sync...");
-          await Future.delayed(const Duration(seconds: 1));
-        }
-        _noSync = true;
-        _currentlySaving = true;
-        await _setPreviousData(builder!.teamManager.save());
-        print("Saved...");
-        /*scaffoldKey.currentState?.showSnackBar(SnackBar(
-          content: const Text("Saved!"),
-        ));*/
-        _currentlySaving = false;
-        _noSync = false;
+      await runSave();
+    });
+    checkTimer = Timer.periodic(Duration(seconds: 10), (timer) async {
+      if (_currentlyChecking) {
+        return;
+      }
+      if (await checkCompetition()) {
+        timer.cancel();
       }
     });
     readConfig().then((v) async {
       print("Read config: $v");
       await _setConfig(v);
       print("Set.");
+      _noSync = false;
     });
   }
 }
@@ -500,7 +738,11 @@ class _MyHomePageState extends State<MyHomePage> {
         });
         break;
       case 3:
-        page = ExperimentsPage(); //experiments
+        page = ExperimentsPage(() {
+          setState(() {
+            selectedIndex = 2;
+          });
+        }); //experiments
         break;
       case 4:
         page = SettingsPage(); //settings
@@ -545,11 +787,12 @@ class _MyHomePageState extends State<MyHomePage> {
                         ),
                     ],
                     selectedIndex: selectedIndex,
-                    onDestinationSelected: (value) {
-                      setState(() {
-                        if (value == 5) {
-                          appState.teamColorBlue = !appState.teamColorBlue;
-                        } else {
+                    onDestinationSelected: (value) async {
+                      if (value == 5) {
+                        appState.teamColorBlue = !appState.teamColorBlue;
+                        await appState.saveConfig();
+                      } else {
+                        setState(() {
                           if (selectedIndex != value && selectedIndex == 4 && appState._unsavedChanges) { //if we're leaving the settings page, save the config
                             appState.saveConfig().then((_) {
                               setState(() {
@@ -559,8 +802,8 @@ class _MyHomePageState extends State<MyHomePage> {
                           } else {
                             selectedIndex = value;
                           }
-                        }
-                      });
+                        });
+                      }
                     },
                   ),
                 ), /*
@@ -581,11 +824,28 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ],
             ),
-            floatingActionButton: FloatingActionButton(
-                onPressed: appState.runSynchronization,
-                child: const Icon(
-                  Icons.sync_alt,
-                )
+            floatingActionButton: Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                FloatingActionButton(
+                  onPressed: appState.runSynchronization,
+                  tooltip: "Synchronize data with server",
+                  child: const Icon(
+                    Icons.sync_alt,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                FloatingActionButton(
+                  onPressed: () async {
+                    await appState.runSave(manual: true);
+                  },
+                  tooltip: "Save local data",
+                  child: const Icon(
+                    Icons.save_outlined,
+                  ),
+                ),
+              ],
             ),
           );
         }
@@ -690,8 +950,9 @@ class TeamTile extends StatelessWidget {
       elevation: 5,
       color: color,
       child: InkWell(
-        onTap: () {
+        onTap: () async {
           appState.builder?.setTeam(teamNo);
+          await Future.delayed(const Duration(milliseconds: 250));
           _viewTeam();
         },
         splashColor: appState.colorfulTeams ? Color.fromARGB(255, 255-color.red, 255-color.green, 255-color.blue) : null,
@@ -709,28 +970,134 @@ class TeamTile extends StatelessWidget {
 
 class TeamSelectionPage extends StatelessWidget {
 
-  const TeamSelectionPage(this._viewTeam, {super.key});
+  TeamSelectionPage(this._viewTeam, {super.key});
 
   final void Function() _viewTeam;
+
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "teamSelection");
+  final GlobalKey<FormFieldState<String>> _entryKey = GlobalKey<FormFieldState<String>>(debugLabel: "teamSelectionEntry");
 
   @override
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
+    final theme = Theme.of(context);
     List<int> teams = appState.builder?.teamManager.managers.keys.toList() ?? [];
+    teams.sort();
     return Padding(
       padding: const EdgeInsets.all(8.0),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          return GridView.builder(
-            itemCount: teams.length,
-            itemBuilder: (context, index) => TeamTile(teams[index], _viewTeam),
-            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-              maxCrossAxisExtent: 128,
-              childAspectRatio: 2.0,
+      child: Column(
+        children: [
+          Expanded(
+            child: GridView.builder(
+              itemCount: teams.length,
+              itemBuilder: (context, index) => TeamTile(teams[index], _viewTeam),
+              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                maxCrossAxisExtent: 128,
+                childAspectRatio: 2.0,
+              ),
             ),
-          );
-        }
-      )
+          ),
+          if (appState.builder != null)
+            Form(
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              key: _formKey,
+              child: Card(
+                color: theme.colorScheme.primaryContainer,
+                child: Padding(
+                  padding: const EdgeInsets.all(8.0),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 150,
+                        child: TextFormField(
+                          key: _entryKey,
+                          decoration: InputDecoration(
+                            border: const UnderlineInputBorder(),
+                            labelText: "Add Team",
+                            labelStyle: TextStyle(
+                              color: theme.colorScheme.onPrimaryContainer,
+                            ),
+                          ),
+                          keyboardType: TextInputType.number,
+                          initialValue: "",
+                          /*onChanged: (value) {
+                            var number = int.tryParse(value);
+  //                          if (number != null) {
+  //
+  //                          }
+                          },*/
+                          validator: (String? value) {
+                            if (value == null) {
+                              return "Value must be a number";
+                            }
+                            var num = int.tryParse(value);
+                            if (num == null) {
+                              return "Value must be a number";
+                            }
+                            if (num < 1) {
+                              return "Invalid team number";
+                            }
+                            if (num > 9999) {
+                              return "Invalid team number";
+                            }
+                            if (teams.contains(num)) {
+                              return "Already added";
+                            }
+                            return null;
+                          },
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      IconButton(
+                        onPressed: () {
+                          if (_formKey.currentState != null && _formKey.currentState!.validate() && _entryKey.currentState != null) {
+                            var value = _entryKey.currentState!.value;
+                            if (value != null) {
+                              var teamNum = int.tryParse(value);
+                              if (teamNum != null && !teams.contains(teamNum)) {
+                                print('need to confirm team: ${_entryKey.currentState!.value}');
+                                showDialog(
+                                  context: context,
+                                  builder: (context) {
+                                    return AlertDialog(
+                                      title: Text("Confirm team"),
+                                      content: Text("Do you want to add team $teamNum?\nThis cannot be undone."),
+                                      actions: [
+                                        TextButton(
+                                          child: Text("Cancel"),
+                                          onPressed: () {
+                                            Navigator.of(context).pop();
+                                            _entryKey.currentState!.reset();
+                                          },
+                                        ),
+                                        TextButton(
+                                          child: Text("Continue"),
+                                          onPressed: () {
+                                            Navigator.of(context).pop();
+                                            print("Continuing with $teamNum");
+                                            appState.builder?.initializeTeam(teamNum);
+                                            appState.notifyListeners();
+                                          }
+                                        ),
+                                      ],
+                                    );
+                                  },
+                                );
+                              }
+                            }
+                          }
+                        },
+                        tooltip: "Add",
+                        icon: const Icon(Icons.add_circle, size: 30),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
 }
@@ -739,7 +1106,12 @@ class ExperimentsPage extends StatelessWidget {
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "scouting");
 
-  ExperimentsPage({super.key});
+  ExperimentsPage(
+      this.goToTeamSelectionPage,
+      {super.key}
+      );
+
+  final void Function() goToTeamSelectionPage;
 
   @override
   Widget build(BuildContext context) {
@@ -750,7 +1122,7 @@ class ExperimentsPage extends StatelessWidget {
         padding: const EdgeInsets.all(20.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
-          children: buildExperiment(context, appState.builder)
+          children: buildExperiment(context, appState.builder, goToTeamSelectionPage)
         )
       ),
     );
@@ -768,6 +1140,7 @@ class SettingsPage extends StatelessWidget {
     var appState = context.watch<MyAppState>();
     final theme = Theme.of(context);
     var genericTextStyle = TextStyle(color: theme.colorScheme.onPrimaryContainer);
+    var buttonColor = (appState.locked && appState.builder == null) ? const Color.fromARGB(0, 0, 0, 0) : null;
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Form(
@@ -781,17 +1154,22 @@ class SettingsPage extends StatelessWidget {
                 IconButton(
                   onPressed: () async {
                     if (appState.locked) {
-                      await appState.unlock();
+                      if (appState.builder != null) { //don't unlock if currently connecting - that would cause problems
+                        await appState.unlock();
+                      }
                     } else if (_formKey.currentState!.validate()) {
                       await appState.connect();
                     }
                   },
+                  highlightColor: buttonColor,
+                  hoverColor: buttonColor,
+                  focusColor: buttonColor,
                   icon: Icon(
                     appState.locked ? Icons.lock_outlined : Icons.wifi,
-                    color: appState.locked ? Colors.red : Colors.green,
+                    color: appState.locked ? (appState.builder == null ? Colors.amber : Colors.red) : Colors.green,
                   ),
                   tooltip: appState.locked
-                      ? "Unlocking will clear all stored data."
+                      ? (appState.builder == null ? "Connecting" : "Unlock connection settings")
                       : "Connect",
                 ),
                 const SizedBox(width: 8),
@@ -845,6 +1223,7 @@ class SettingsPage extends StatelessWidget {
                                     return _verifyServerUrl(value);
                                   },
                                 ),
+                                SimplePasswordFormField(genericTextStyle: genericTextStyle, appState: appState),
                               ]
                           )
                       )
@@ -941,9 +1320,106 @@ class SettingsPage extends StatelessWidget {
                 ),
               ),
             ),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: theme.colorScheme.primaryContainer,
+                  ),
+                  onPressed: () async {
+                    showDialog(
+                      context: context,
+                      builder: (context) {
+                        return AlertDialog(
+                          title: const Text("Clear all local data?"),
+                          content: const Text("This will clear all local data, and force a sync with the server."),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                              },
+                              child: const Text("Cancel"),
+                            ),
+                            TextButton(
+                              onPressed: () async {
+                                Navigator.of(context).pop();
+                                await appState.clearAllData();
+                              },
+                              child: const Text("Confirm"),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                  child: const Padding(
+                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    child: Text("Force sync data - will clear all local data"),
+                  )
+                ),
+              ],
+            )
           ],
         ),
       ),
+    );
+  }
+}
+
+class SimplePasswordFormField extends StatefulWidget {
+  const SimplePasswordFormField({
+    super.key,
+    required this.genericTextStyle,
+    required this.appState,
+  });
+
+  final TextStyle genericTextStyle;
+  final MyAppState appState;
+
+  @override
+  State<SimplePasswordFormField> createState() => _SimplePasswordFormFieldState();
+}
+
+class _SimplePasswordFormFieldState extends State<SimplePasswordFormField> {
+
+  bool passwordVisible = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return TextFormField(
+      decoration: InputDecoration(
+        border: const UnderlineInputBorder(),
+        labelText: "Password",
+        labelStyle: widget.genericTextStyle,
+        suffixIcon: IconButton(
+          icon: Icon(
+            passwordVisible ? Icons.visibility : Icons.visibility_off,
+            color: theme.colorScheme.primary,
+          ),
+          onPressed: () {
+            setState(() {
+              passwordVisible = !passwordVisible;
+            });
+          },
+        ),
+      ),
+      obscureText: !passwordVisible,
+      enableIMEPersonalizedLearning: false,
+      enableSuggestions: false,
+      keyboardType: TextInputType.visiblePassword,
+      readOnly: widget.appState.locked,
+      initialValue: widget.appState._password,
+      onChanged: (value) {
+        widget.appState._password = value;
+      },
+      validator: (String? value) {
+        if (value == null || value == "") {
+          return "Must have a password!";
+        }
+        return null; // ok
+      },
     );
   }
 }
