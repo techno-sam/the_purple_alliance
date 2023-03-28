@@ -5,17 +5,17 @@ import 'package:the_purple_alliance/widgets.dart';
 import 'package:the_purple_alliance/data_manager.dart';
 
 abstract class JsonWidgetBuilder {
-  JsonWidgetBuilder.fromJson(Map<String, dynamic> displayData);
+  JsonWidgetBuilder.fromJson(Map<String, dynamic> schemeData);
   Widget build(BuildContext context);
 }
 
 class TextWidgetBuilder extends JsonWidgetBuilder {
   late final String _label;
   double? _padding;
-  TextWidgetBuilder.fromJson(Map<String, dynamic> displayData) : super.fromJson(displayData) {
-    _label = displayData["label"];
-    if (displayData.containsKey("padding")) {
-      var padding = displayData["padding"];
+  TextWidgetBuilder.fromJson(Map<String, dynamic> schemeData) : super.fromJson(schemeData) {
+    _label = schemeData["label"];
+    if (schemeData.containsKey("padding")) {
+      var padding = schemeData["padding"];
       if (padding is double) {
         _padding = padding;
       }
@@ -43,20 +43,22 @@ abstract class SynchronizedBuilder<T extends DataValue> extends JsonWidgetBuilde
   }
 
   late final String _key;
-  SynchronizedBuilder.fromJson(Map<String, dynamic> displayData) : super.fromJson(displayData) {
-    _key = displayData["key"];
+  late final Map<String, dynamic> _initData;
+  SynchronizedBuilder.fromJson(Map<String, dynamic> schemeData) : super.fromJson(schemeData) {
+    _key = schemeData["key"];
+    _initData = Map.unmodifiable(schemeData);
   }
 
   void setDataManager(DataManager? manager) {
     _manager = manager;
-    if (manager != null && !manager.values.containsKey(_key)) {
-      manager.values[_key] = DataValue.load(T);
+    if (manager != null) {
+      initDataManager(manager);
     }
   }
 
   void initDataManager(DataManager manager) {
     if (!manager.values.containsKey(_key)) {
-      manager.values[_key] = DataValue.load(T);
+      manager.values[_key] = DataValue.load(T, _initData);
     }
   }
 }
@@ -64,10 +66,10 @@ abstract class SynchronizedBuilder<T extends DataValue> extends JsonWidgetBuilde
 class TextFieldWidgetBuilder extends SynchronizedBuilder<TextDataValue> {
   late final String _label;
   double? _padding;
-  TextFieldWidgetBuilder.fromJson(Map<String, dynamic> displayData) : super.fromJson(displayData) {
-    _label = displayData["label"];
-    if (displayData.containsKey("padding")) {
-      var padding = displayData["padding"];
+  TextFieldWidgetBuilder.fromJson(Map<String, dynamic> schemeData) : super.fromJson(schemeData) {
+    _label = schemeData["label"];
+    if (schemeData.containsKey("padding")) {
+      var padding = schemeData["padding"];
       if (padding is double) {
         _padding = padding;
       }
@@ -97,12 +99,62 @@ class TextFieldWidgetBuilder extends SynchronizedBuilder<TextDataValue> {
   }
 }
 
+class DropdownWidgetBuilder extends SynchronizedBuilder<DropdownDataValue> {
+  late final String _label;
+  double? _padding;
+  DropdownWidgetBuilder.fromJson(Map<String, dynamic> schemeData) : super.fromJson(schemeData) {
+    _label = schemeData["label"];
+    if (schemeData.containsKey("padding")) {
+      var padding = schemeData["padding"];
+      if (padding is double) {
+        _padding = padding;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.all(_padding ?? 8.0),
+      child: Consumer<MyAppState>(
+        builder: (context, appState, child) {
+          return DropdownButtonFormField(
+            key: Key(_key),
+            items: [
+              if (_dataValue != null)
+                for (String value in _dataValue!.options)
+                  DropdownMenuItem(
+                    value: value,
+                    child: Text(
+                      value,
+                      style: TextStyle(
+                        color: theme.colorScheme.onPrimaryContainer,
+                      ),
+                    ),
+                  ),
+            ],
+            onChanged: (value) {
+              if (value != null) {
+                _dataValue?.value = value;
+              }
+            },
+            value: _dataValue?.value,
+            dropdownColor: theme.colorScheme.primaryContainer,
+          );
+        },
+      ),
+    );
+  }
+}
+
 Map<String, JsonWidgetBuilder Function(Map<String, dynamic>)> widgetBuilders = {};
 
 void initializeBuilders() {
   widgetBuilders.clear();
   widgetBuilders["text"] = TextWidgetBuilder.fromJson;
   widgetBuilders["text_field"] = TextFieldWidgetBuilder.fromJson;
+  widgetBuilders["dropdown"] = DropdownWidgetBuilder.fromJson;
   initializeValueHolders();
 }
 

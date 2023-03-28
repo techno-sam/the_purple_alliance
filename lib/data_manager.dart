@@ -1,4 +1,4 @@
-final Map<Type, DataValue Function()> _valueTypes = {};
+final Map<Type, DataValue Function(Map<String, dynamic>)> _valueTypes = {};
 
 int _generateTimestamp() {
   return DateTime.now().toUtc().millisecondsSinceEpoch;
@@ -10,9 +10,9 @@ abstract class DataValue {
   void Function() changeNotifier = () {};
   void fromJson(dynamic data);
   
-  static dynamic load(Type t) {
+  static dynamic load(Type t, Map<String, dynamic> initData) {
     if (_valueTypes.containsKey(t)) {
-      return _valueTypes[t]!();
+      return _valueTypes[t]!(initData);
     } else {
       throw "Type $t is not registered";
     }
@@ -66,9 +66,61 @@ class TextDataValue extends DataValue {
   }
 }
 
+class DropdownDataValue extends DataValue {
+  String _value = "";
+  late final List<String> _options;
+  late final String _default;
+
+  DropdownDataValue(Map<String, dynamic> initData) {
+    _options = List<String>.from(initData["options"]);
+    _value = initData.containsKey("default") ? initData["default"] : _options[0];
+    if (!_options.contains(_value)) {
+      _value = _options[0];
+    }
+    _default = _value;
+  }
+
+  @override
+  void fromJson(data) {
+    assert (data is String);
+    if (_options.contains(data)) {
+      _value = data;
+    }
+  }
+
+  @override
+  toJson() {
+    return _value;
+  }
+
+  @override
+  void reset() {
+    super.reset();
+    _value = _default;
+  }
+
+  List<String> get options => List.unmodifiable(_options);
+
+  String get value => _value;
+  set value(String value) {
+    if (_options.contains(value)) {
+      _value = value;
+      markChange();
+    }
+  }
+}
+
+/// Simplification wrapper for DataValue constructors that do not take any initialization data
+DataValue Function(Map<String, dynamic>) _s(DataValue Function() f) {
+  return (_) {
+    return f();
+  };
+}
+
 void initializeValueHolders() {
   _valueTypes.clear();
-  _valueTypes[TextDataValue] = TextDataValue.new;
+  _valueTypes[TextDataValue] = _s(TextDataValue.new);
+  _valueTypes[DropdownDataValue] = DropdownDataValue.new;
 }
 
 class DataManager {
@@ -84,7 +136,7 @@ class DataManager {
             if (entryData.containsKey("timestamp")) {
               var timestamp = entryData["timestamp"];
               if (timestamp is int) {
-                if (timestamp > entry.value._lastEdited || fromDisk) {
+                if (timestamp >= entry.value._lastEdited || fromDisk) {
                   entry.value.fromJson(entryData["value"]);
                   entry.value._lastEdited = fromDisk ? entryData["timestamp"] : -1;
                 }

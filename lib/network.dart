@@ -9,7 +9,7 @@ class DevHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => host.endsWith(".local");
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => port != 443;
   }
 }
 

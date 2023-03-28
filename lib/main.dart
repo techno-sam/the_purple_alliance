@@ -417,7 +417,7 @@ class MyAppState extends ChangeNotifier {
         print("Competition changed, clearing cache");
         var scheme = await getScheme();
         await _setCachedScheme(scheme);
-        builder = ExperimentBuilder.fromJson(scheme);
+        builder = safeLoadBuilder(scheme);
         await _setCachedServerMeta(serverMeta);
         await runSynchronization();
       }
@@ -1151,8 +1151,33 @@ class SettingsPage extends StatelessWidget {
                 IconButton(
                   onPressed: () async {
                     if (appState.locked) {
-                      if (appState.builder != null) { //don't unlock if currently connecting - that would cause problems
+                      if (appState.builder != null) { //don't unlock if currently connecting - that could cause problems
                         await appState.unlock();
+                      } else {
+                        showDialog(
+                          context: context,
+                          builder: (context) {
+                            return AlertDialog(
+                              title: const Text("Connecting"),
+                              content: const Text("Disconnecting while connecting can cause issues. Are you sure you want to disconnect?"),
+                              actions: [
+                                TextButton(
+                                  child: const Text("Cancel"),
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
+                                  },
+                                ),
+                                TextButton(
+                                  child: const Text("Disconnect"),
+                                  onPressed: () async {
+                                    Navigator.of(context).pop();
+                                    await appState.unlock();
+                                  },
+                                ),
+                              ],
+                            );
+                          },
+                        );
                       }
                     } else if (_formKey.currentState!.validate()) {
                       await appState.connect();
