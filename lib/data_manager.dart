@@ -33,6 +33,18 @@ abstract class DataValue {
   }
 }
 
+mixin TimestampSpecialBehaviorMixin on DataValue {
+  /// localOld is true if the data is from the server, and the local data is older - if loading from disk and a timestamp is present, localOld will always be true
+  ///
+  /// Returns true if the current timestamp should be kept, returns false if it should be set to -1
+  bool fromJsonSpecial(dynamic data, bool localOld, bool fromDisk);
+
+  /// Only called if no timestamp is present in the read data
+  ///
+  /// Returns true if the current timestamp should be kept, returns false if it should be set to -1
+  bool fromJsonBackup(dynamic data, bool fromDisk);
+}
+
 class TextDataValue extends DataValue {
 
   String _value = "";
@@ -110,6 +122,53 @@ class DropdownDataValue extends DataValue {
   }
 }
 
+class StarRatingDataValue extends DataValue with TimestampSpecialBehaviorMixin {
+  double? _personalValue;
+  double? get personalValue => _personalValue;
+  set personalValue(double? value) {
+    _personalValue = value;
+    markChange();
+  }
+
+  double? averageValue;
+
+  StarRatingDataValue();
+
+  @override
+  void fromJson(data) {
+    assert (data is Map<String, dynamic>);
+    _personalValue = data["personal_value"];
+    averageValue = data["average_value"];
+  }
+
+  @override
+  bool fromJsonSpecial(dynamic data, bool localOld, bool fromDisk) {
+    assert (data is Map<String, dynamic>);
+    // we always set the average value, since that is server-calculated
+    // we only set the personal value if it is newer than the local value, or if the local value does not exist
+    averageValue = data["average_value"];
+    if (localOld || _personalValue == null) {
+      _personalValue = data["personal_value"];
+      return false; // data is now completely from the server, update timestamp to match
+    }
+    return true; // our data is still potentially unique, keep the timestamp
+  }
+
+  @override
+  bool fromJsonBackup(dynamic data, bool fromDisk) {
+    fromJson(data);
+    return false; // data is now completely from the server, update timestamp to match
+  }
+
+  @override
+  toJson() {
+    return {
+      "personal_value": _personalValue,
+      "average_value": averageValue, // this is, of course, ignored by the server and overriden with a more accurate average value - the server also overrides the time-based system
+    };
+  }
+}
+
 /// Simplification wrapper for DataValue constructors that do not take any initialization data
 DataValue Function(Map<String, dynamic>) _s(DataValue Function() f) {
   return (_) {
@@ -121,6 +180,7 @@ void initializeValueHolders() {
   _valueTypes.clear();
   _valueTypes[TextDataValue] = _s(TextDataValue.new);
   _valueTypes[DropdownDataValue] = DropdownDataValue.new;
+  _valueTypes[StarRatingDataValue] = _s(StarRatingDataValue.new);
 }
 
 class DataManager {
@@ -133,21 +193,40 @@ class DataManager {
         if (data.containsKey(entry.key)) {
           var entryData = data[entry.key];
           if (entryData is Map<String, dynamic> && entryData.containsKey("value")) {
+            bool specialTimestampHandling = entry.value is TimestampSpecialBehaviorMixin;
             if (entryData.containsKey("timestamp")) {
               var timestamp = entryData["timestamp"];
               if (timestamp is int) {
                 if (timestamp >= entry.value._lastEdited || fromDisk) {
-                  entry.value.fromJson(entryData["value"]);
-                  entry.value._lastEdited = fromDisk ? entryData["timestamp"] : -1;
+                  var keepTimestamp = false;
+                  if (specialTimestampHandling) {
+                    keepTimestamp = (entry.value as TimestampSpecialBehaviorMixin).fromJsonSpecial(entryData["value"], true, fromDisk); // local is always old because of the above check
+                  } else {
+                    entry.value.fromJson(entryData["value"]);
+                  }
+                  if (!keepTimestamp || fromDisk) {
+                    entry.value._lastEdited = fromDisk ? entryData["timestamp"] : -1;
+                  }
                 }
               } else if (fromDisk) {
                 print("Invalid timestamp: $timestamp");
-                entry.value.fromJson(entryData["value"]);
+                if (specialTimestampHandling) {
+                  (entry.value as TimestampSpecialBehaviorMixin).fromJsonBackup(entryData["value"], fromDisk);
+                } else {
+                  entry.value.fromJson(entryData["value"]);
+                }
                 entry.value._lastEdited = _generateTimestamp();
               }
             } else {
-              entry.value.fromJson(entryData["value"]);
-              entry.value._lastEdited = fromDisk ? _generateTimestamp() : -1;
+              var keepTimestamp = false;
+              if (specialTimestampHandling) {
+                keepTimestamp = (entry.value as TimestampSpecialBehaviorMixin).fromJsonBackup(entryData["value"], fromDisk);
+              } else {
+                entry.value.fromJson(entryData["value"]);
+              }
+              if (!keepTimestamp || fromDisk) { // don't care what the data value asks, if we have no timestamp set yet, and we are loading from disk, it should be set to the current time
+                entry.value._lastEdited = fromDisk ? _generateTimestamp() : -1;
+              }
             }
           } else {
             entry.value.reset();

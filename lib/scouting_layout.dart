@@ -9,9 +9,18 @@ abstract class JsonWidgetBuilder {
   Widget build(BuildContext context);
 }
 
+enum TextType {
+  standard,
+  heading
+}
+
 class TextWidgetBuilder extends JsonWidgetBuilder {
   late final String _label;
   double? _padding;
+  String? _style;
+
+  TextType get style => _style == null ? TextType.standard : (TextType.values.firstWhere((element) => element.name == _style, orElse: () => TextType.standard));
+
   TextWidgetBuilder.fromJson(Map<String, dynamic> schemeData) : super.fromJson(schemeData) {
     _label = schemeData["label"];
     if (schemeData.containsKey("padding")) {
@@ -20,13 +29,37 @@ class TextWidgetBuilder extends JsonWidgetBuilder {
         _padding = padding;
       }
     }
+    if (schemeData.containsKey("style")) {
+      _style = schemeData["style"];
+    }
   }
   
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    Widget child;
+    switch (style) {
+      case TextType.heading:
+        child = Column(
+          children: [
+            Divider(
+              color: Colors.grey.shade700,
+              thickness: 0.5,
+              indent: 25,
+              endIndent: 25,
+            ),
+            Text(_label, style: theme.textTheme.titleLarge),
+            const Divider(color: Colors.black),
+          ],
+        );
+        break;
+      default:
+        child = Text(_label);
+        break;
+    }
     return Padding(
       padding: EdgeInsets.all(_padding ?? 8.0),
-      child: Text(_label),
+      child: child,
     );
   }
 }
@@ -63,10 +96,13 @@ abstract class SynchronizedBuilder<T extends DataValue> extends JsonWidgetBuilde
   }
 }
 
-class TextFieldWidgetBuilder extends SynchronizedBuilder<TextDataValue> {
+abstract class LabeledAndPaddedSynchronizedBuilder<T extends DataValue> extends SynchronizedBuilder<T> {
   late final String _label;
+  String get label => _label;
+
   double? _padding;
-  TextFieldWidgetBuilder.fromJson(Map<String, dynamic> schemeData) : super.fromJson(schemeData) {
+  double? get padding => _padding;
+  LabeledAndPaddedSynchronizedBuilder.fromJson(Map<String, dynamic> schemeData) : super.fromJson(schemeData) {
     _label = schemeData["label"];
     if (schemeData.containsKey("padding")) {
       var padding = schemeData["padding"];
@@ -75,6 +111,10 @@ class TextFieldWidgetBuilder extends SynchronizedBuilder<TextDataValue> {
       }
     }
   }
+}
+
+class TextFieldWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<TextDataValue> {
+  TextFieldWidgetBuilder.fromJson(super.schemeData) : super.fromJson();
   
   @override
   Widget build(BuildContext context) {
@@ -99,18 +139,8 @@ class TextFieldWidgetBuilder extends SynchronizedBuilder<TextDataValue> {
   }
 }
 
-class DropdownWidgetBuilder extends SynchronizedBuilder<DropdownDataValue> {
-  late final String _label;
-  double? _padding;
-  DropdownWidgetBuilder.fromJson(Map<String, dynamic> schemeData) : super.fromJson(schemeData) {
-    _label = schemeData["label"];
-    if (schemeData.containsKey("padding")) {
-      var padding = schemeData["padding"];
-      if (padding is double) {
-        _padding = padding;
-      }
-    }
-  }
+class DropdownWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<DropdownDataValue> {
+  DropdownWidgetBuilder.fromJson(super.schemeData) : super.fromJson();
 
   @override
   Widget build(BuildContext context) {
@@ -153,6 +183,38 @@ class DropdownWidgetBuilder extends SynchronizedBuilder<DropdownDataValue> {
   }
 }
 
+class StarRatingWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<StarRatingDataValue> {
+  StarRatingWidgetBuilder.fromJson(super.schemeData) : super.fromJson();
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: EdgeInsets.all(_padding ?? 8.0),
+      child: Consumer<MyAppState>(
+        builder: (context, appState, child) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_label),
+              const SizedBox(height: 2),
+              StarRating(
+                key: Key(_key),
+                initialRating: _dataValue?.personalValue ?? 0,
+                averageRating: _dataValue?.averageValue,
+                onChanged: (value) {
+                  _dataValue?.personalValue = value;
+                },
+                color: Colors.amber,
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+}
+
 Map<String, JsonWidgetBuilder Function(Map<String, dynamic>)> widgetBuilders = {};
 
 void initializeBuilders() {
@@ -160,6 +222,7 @@ void initializeBuilders() {
   widgetBuilders["text"] = TextWidgetBuilder.fromJson;
   widgetBuilders["text_field"] = TextFieldWidgetBuilder.fromJson;
   widgetBuilders["dropdown"] = DropdownWidgetBuilder.fromJson;
+  widgetBuilders["star_rating"] = StarRatingWidgetBuilder.fromJson;
   initializeValueHolders();
 }
 

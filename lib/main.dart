@@ -31,12 +31,13 @@ class MyApp extends StatelessWidget {
   MyApp({super.key});
 
   final _scaffoldKey = GlobalKey<ScaffoldMessengerState>();
+  final _homepageKey = GlobalKey<_MyHomePageState>();
 
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-        create: (context) => MyAppState(_scaffoldKey),
+        create: (context) => MyAppState(_scaffoldKey, _homepageKey),
         child: MaterialApp(
           scaffoldMessengerKey: _scaffoldKey,
           title: 'The Purple Alliance',
@@ -46,7 +47,7 @@ class MyApp extends StatelessWidget {
               seedColor: Colors.purple,
             ),
           ),
-          home: const MyHomePage(),
+          home: MyHomePage(key: _homepageKey),
         )
     );
   }
@@ -447,11 +448,10 @@ class MyAppState extends ChangeNotifier {
     _noSync = true;
     _currentlySaving = true;
     builder = null;
-    var scheme = await _cachedScheme;
-    if (scheme == null) {
-      scheme = await getScheme();
-      _setCachedScheme(scheme);
-    }
+
+    var scheme = await getScheme();
+    _setCachedScheme(scheme);
+
     builder = safeLoadBuilder(scheme);
     builder?.setChangeNotifier(notifyListeners);
     _noSync = false;
@@ -601,6 +601,13 @@ class MyAppState extends ChangeNotifier {
     await saveConfig();
   }
 
+  Future<void> reconnect() async {
+    if (locked) {
+      await unlock();
+      await connect(reconnecting: true);
+    }
+  }
+
   int getDisplayTeamNumber() {
     return _teamNumber ?? _teamNumberInProgress;
   }
@@ -661,8 +668,9 @@ class MyAppState extends ChangeNotifier {
         action: SnackBarAction(
           label: "Info",
           onPressed: () {
+            if (homepageContext == null) return;
             showDialog(
-              context: scaffoldKey.currentContext!,
+              context: homepageContext!,
               builder: (context) {
                 return AlertDialog(
                   title: const Text("Error while synchronizing"),
@@ -711,8 +719,10 @@ class MyAppState extends ChangeNotifier {
   }
 
   final GlobalKey<ScaffoldMessengerState> scaffoldKey;
+  final GlobalKey<_MyHomePageState> _homepageKey;
+  BuildContext? get homepageContext => _homepageKey.currentContext;
 
-  MyAppState(this.scaffoldKey) {
+  MyAppState(this.scaffoldKey, this._homepageKey) {
     _noSync = true;
     asyncTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
       _minutesSinceLastSync++;
@@ -1222,14 +1232,22 @@ class ExperimentsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
+    var children = buildExperiment(context, appState.builder, goToTeamSelectionPage);
     return Form(
       key: _formKey,
       child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: buildExperiment(context, appState.builder, goToTeamSelectionPage)
-        )
+          padding: const EdgeInsets.all(20.0),
+          child: children.length <= 1
+              ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children
+          )
+              : SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: children,
+            ),
+          ),
       ),
     );
   }
@@ -1241,9 +1259,13 @@ bool _isQRScanningSupported() {
 
 class SettingsPage extends StatelessWidget {
 
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "settings");
+  static final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "settings");
+  static final GlobalKey<FormFieldState<String>> _teamNumberKey = GlobalKey<FormFieldState<String>>(debugLabel: "teamNumber");
+  static final GlobalKey<FormFieldState<String>> _serverKey = GlobalKey<FormFieldState<String>>(debugLabel: "serverUrl");
+  static final GlobalKey<FormFieldState<String>> _passwordKey = GlobalKey<FormFieldState<String>>(debugLabel: "password");
+  static final GlobalKey<FormFieldState<String>> _usernameKey = GlobalKey<FormFieldState<String>>(debugLabel: "username");
 
-  final MobileScannerController _cameraController = MobileScannerController();
+  final MobileScannerController _cameraController = MobileScannerController(detectionSpeed: DetectionSpeed.noDuplicates);
 
   SettingsPage({super.key});
 
@@ -1265,6 +1287,14 @@ class SettingsPage extends StatelessWidget {
               children: [
                 Column(
                   children: [
+                    if (appState.locked)
+                      IconButton(
+                        onPressed: () async {
+                          await appState.reconnect();
+                        },
+                        icon: const Icon(Icons.refresh),
+                        tooltip: "Refresh scheme",
+                      ),
                     IconButton(
                       onPressed: () async {
                         if (appState.locked) {
@@ -1387,7 +1417,7 @@ class SettingsPage extends StatelessWidget {
                                       ),
                                       body: MobileScanner(
                                         controller: _cameraController,
-                                        onDetect: (capture) {
+                                        onDetect: (capture) async {
                                           final List<Barcode> barcodes = capture.barcodes;
                                           debugPrint("barcodes: $barcodes");
                                           for (final barcode in barcodes) {
@@ -1404,6 +1434,7 @@ class SettingsPage extends StatelessWidget {
                                                     appState._teamNumberInProgress = decoded["team_number"];
                                                     appState._serverUrlInProgress = decoded["server"];
                                                     appState._password = decoded["password"];
+                                                    print("Decoded number: ${appState._teamNumberInProgress}");
                                                     appState.scaffoldKey.currentState?.showSnackBar(const SnackBar(content: Text("Obtained connection data")));
                                                     print("Connection data got!");
                                                     alreadyGot = true;
@@ -1452,14 +1483,16 @@ class SettingsPage extends StatelessWidget {
                           child: Column(
                               children: [
                                 TextFormField(
+                                  key: _teamNumberKey,
                                   decoration: InputDecoration(
                                     border: const UnderlineInputBorder(),
                                     labelText: "Team Number",
                                     labelStyle: genericTextStyle,
                                   ),
+                                  controller: TextEditingController(text: "${appState.getDisplayTeamNumber()}"),
                                   keyboardType: TextInputType.number,
                                   readOnly: appState.locked,
-                                  initialValue: "${appState.getDisplayTeamNumber()}",
+//                                  initialValue: "${appState.getDisplayTeamNumber()}",
                                   onChanged: (value) {
                                     var number = int.tryParse(value);
                                     if (number != null) {
@@ -1474,14 +1507,16 @@ class SettingsPage extends StatelessWidget {
                                   },
                                 ),
                                 TextFormField(
+                                  key: _serverKey,
                                   decoration: InputDecoration(
                                     border: const UnderlineInputBorder(),
                                     labelText: "Server",
                                     labelStyle: genericTextStyle,
                                   ),
+                                  controller: TextEditingController(text: appState.getDisplayUrl()),
                                   keyboardType: TextInputType.url,
                                   readOnly: appState.locked,
-                                  initialValue: appState.getDisplayUrl(),
+//                                  initialValue: appState.getDisplayUrl(),
                                   onChanged: (value) {
                                     appState._serverUrlInProgress = value;
                                   },
@@ -1492,23 +1527,33 @@ class SettingsPage extends StatelessWidget {
                                     return _verifyServerUrl(value);
                                   },
                                 ),
-                                SimplePasswordFormField(genericTextStyle: genericTextStyle, appState: appState),
+                                TextFormField(
+                                  key: _usernameKey,
+                                  decoration: InputDecoration(
+                                    border: const UnderlineInputBorder(),
+                                    labelText: "Name",
+                                    labelStyle: genericTextStyle,
+                                  ),
+                                  controller: TextEditingController(text: appState.username),
+                                  keyboardType: TextInputType.name,
+                                  readOnly: appState.locked,
+                                  onChanged: (value) {
+                                    appState.username = value;
+                                  },
+                                  validator: (String? value) {
+                                    if (value == null || value == "") {
+                                      return "Must have a name set";
+                                    }
+                                    return null;
+                                  },
+                                ),
+                                SimplePasswordFormField(formKey: _passwordKey, genericTextStyle: genericTextStyle, appState: appState),
                               ]
                           )
                       )
                   ),
                 ),
               ],
-            ),
-            const SizedBox(height: 10),
-            ConfigCard(
-              theme: theme,
-              label: "Username",
-              onChanged: (value) {
-                appState.username = value;
-              },
-              keyBoardType: TextInputType.name,
-              initialValue: appState.username,
             ),
             const SizedBox(height: 10),
             Card(
@@ -1647,10 +1692,12 @@ class SimplePasswordFormField extends StatefulWidget {
     super.key,
     required this.genericTextStyle,
     required this.appState,
+    this.formKey,
   });
 
   final TextStyle genericTextStyle;
   final MyAppState appState;
+  final Key? formKey;
 
   @override
   State<SimplePasswordFormField> createState() => _SimplePasswordFormFieldState();
@@ -1664,6 +1711,7 @@ class _SimplePasswordFormFieldState extends State<SimplePasswordFormField> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return TextFormField(
+      key: widget.formKey,
       decoration: InputDecoration(
         border: const UnderlineInputBorder(),
         labelText: "Password",
@@ -1680,12 +1728,13 @@ class _SimplePasswordFormFieldState extends State<SimplePasswordFormField> {
           },
         ),
       ),
+      controller: TextEditingController(text: widget.appState._password),
       obscureText: !passwordVisible,
       enableIMEPersonalizedLearning: false,
       enableSuggestions: false,
       keyboardType: TextInputType.visiblePassword,
       readOnly: widget.appState.locked,
-      initialValue: widget.appState._password,
+//      initialValue: widget.appState._password,
       onChanged: (value) {
         widget.appState._password = value;
       },
@@ -1791,6 +1840,7 @@ class ConfigCard extends StatelessWidget {
     required this.onChanged,
     this.keyBoardType,
     this.initialValue,
+    this.formKey,
   });
 
   final ThemeData theme;
@@ -1798,6 +1848,7 @@ class ConfigCard extends StatelessWidget {
   final void Function(String) onChanged;
   final TextInputType? keyBoardType;
   final String? initialValue;
+  final Key? formKey;
 
   @override
   Widget build(BuildContext context) {
@@ -1806,6 +1857,7 @@ class ConfigCard extends StatelessWidget {
       child: Padding(
           padding: const EdgeInsets.all(8.0),
           child: TextFormField(
+            key: formKey,
             decoration: InputDecoration(
               border: const UnderlineInputBorder(),
               labelText: label,
