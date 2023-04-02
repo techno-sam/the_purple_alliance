@@ -9,6 +9,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "57.0.0"
+  adaptive_breakpoints:
+    dependency: "direct main"
+    description:
+      name: adaptive_breakpoints
+      sha256: "3aa6ef09074fe7824dfdc9a6d9f955c8a3bae0fb71c495cbd72f471a87699b4f"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.1.6"
+  adaptive_navigation:
+    dependency: "direct main"
+    description:
+      name: adaptive_navigation
+      sha256: "271d3e54147ce37b389c3d7d19777b4340e4ccd440d0349457c8b8db197b1c41"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.0.9"
   analyzer:
     dependency: transitive
     description:
@@ -171,6 +187,11 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_web_plugins:
+    dependency: transitive
+    description: flutter
+    source: sdk
+    version: "0.0.0"
   glob:
     dependency: transitive
     description:
@@ -275,6 +296,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.8.0"
+  mobile_scanner:
+    dependency: "direct main"
+    description:
+      name: mobile_scanner
+      sha256: da55204e5439bc8dc058df56231a7a1d513c6ec9cbad84492f56d493382d296f
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.2.0"
   nested:
     dependency: transitive
     description:
@@ -395,6 +424,22 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.2.2"
+  qr:
+    dependency: transitive
+    description:
+      name: qr
+      sha256: "5c4208b4dc0d55c3184d10d83ee0ded6212dc2b5e2ba17c5a0c0aab279128d21"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.1.0"
+  qr_flutter:
+    dependency: "direct main"
+    description:
+      name: qr_flutter
+      sha256: c5c121c54cb6dd837b9b9d57eb7bc7ec6df4aee741032060c8833a678c80b87e
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.0.0"
   sky_engine:
     dependency: transitive
     description: flutter

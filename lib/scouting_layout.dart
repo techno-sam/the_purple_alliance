@@ -121,6 +121,10 @@ class DropdownWidgetBuilder extends SynchronizedBuilder<DropdownDataValue> {
         builder: (context, appState, child) {
           return DropdownButtonFormField(
             key: Key(_key),
+            decoration: InputDecoration(
+              border: const OutlineInputBorder(),
+              labelText: _label,
+            ),
             items: [
               if (_dataValue != null)
                 for (String value in _dataValue!.options)
@@ -137,6 +141,7 @@ class DropdownWidgetBuilder extends SynchronizedBuilder<DropdownDataValue> {
             onChanged: (value) {
               if (value != null) {
                 _dataValue?.value = value;
+                print("Set dropdown value to $value");
               }
             },
             value: _dataValue?.value,

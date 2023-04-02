@@ -42,6 +42,10 @@ dependencies:
   english_words: ^4.0.0
   json_serializable: ^6.6.1
   path_provider: ^2.0.14
+  qr_flutter: ^4.0.0
+  mobile_scanner: ^3.2.0
+  adaptive_navigation: ^0.0.9
+  adaptive_breakpoints: ^0.1.6
 
 dev_dependencies:
   flutter_test:

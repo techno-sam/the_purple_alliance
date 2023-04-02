@@ -2,13 +2,18 @@ import 'dart:convert';
 import 'dart:async';
 import 'dart:io';
 
+import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
+import 'package:adaptive_navigation/adaptive_navigation.dart';
 import 'package:english_words/english_words.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 
-import 'package:the_purple_alliance/data_manager.dart';
 import 'package:the_purple_alliance/widgets.dart';
 import 'package:the_purple_alliance/scouting_layout.dart';
 import 'package:the_purple_alliance/network.dart' as network;
@@ -34,7 +39,7 @@ class MyApp extends StatelessWidget {
         create: (context) => MyAppState(_scaffoldKey),
         child: MaterialApp(
           scaffoldMessengerKey: _scaffoldKey,
-          title: 'Namer App',
+          title: 'The Purple Alliance',
           theme: ThemeData(
             useMaterial3: true,
             colorScheme: ColorScheme.fromSeed(
@@ -63,10 +68,12 @@ class MyAppState extends ChangeNotifier {
   var __unsavedChanges = false;
   bool get _unsavedChanges => __unsavedChanges;
   set _unsavedChanges(bool value) {
-    __unsavedChanges = value;
-    _unsavedChangesBarState?.target?.setState(() {
-      _unsavedChangesBarState?.target?.unsavedChanges = value;
-    });
+    if (__unsavedChanges != value) {
+      __unsavedChanges = value;
+      _unsavedChangesBarState?.target?.setState(() {
+        _unsavedChangesBarState?.target?.unsavedChanges = value;
+      });
+    }
   }
   var current = WordPair.random();
 
@@ -90,26 +97,31 @@ class MyAppState extends ChangeNotifier {
 
   Future<String> get _localPath async {
     final directory = await getApplicationDocumentsDirectory();
+
     return "${directory.path}/the_purple_alliance";
   }
 
   Future<File> get _configFile async {
     final path = await _localPath;
+    await Directory(path).create(recursive: true);
     return File('$path/config.json');
   }
 
   Future<File> get _dataFile async {
     final path = await _localPath;
+    await Directory(path).create(recursive: true);
     return File('$path/data.json');
   }
 
   Future<File> get _schemeFile async {
     final path = await _localPath;
+    await Directory(path).create(recursive: true);
     return File('$path/scheme.json');
   }
   
   Future<File> get _cachedServerMetaFile async {
     final path = await _localPath;
+    await Directory(path).create(recursive: true);
     return File('$path/server_meta.json');
   }
 
@@ -496,6 +508,29 @@ class MyAppState extends ChangeNotifier {
     Map<String, dynamic>? remoteServerMeta;
     if (serverFound) {
       remoteServerMeta = await getServerMeta();
+      int myTeamNumber = _teamNumber ?? _teamNumberInProgress;
+      var remoteTeamNumber = remoteServerMeta.containsKey("team") ? remoteServerMeta["team"] : null;
+      if (remoteTeamNumber != myTeamNumber || remoteTeamNumber == null) {
+        remoteServerMeta = null;
+        serverFound = false;
+        locked = false;
+        _teamNumber = null;
+        _serverUrl = null;
+        notifyListeners();
+        print("Remote team $remoteTeamNumber does not match $myTeamNumber");
+        scaffoldKey.currentState?.clearSnackBars();
+        scaffoldKey.currentState?.showSnackBar(SnackBar(
+          content: Text("Server team wrong ($remoteTeamNumber), expected $myTeamNumber"),
+          action: remoteTeamNumber is int ? SnackBarAction(
+            label: "Set",
+            onPressed: () {
+              _teamNumberInProgress = remoteTeamNumber;
+              notifyListeners();
+            }
+          ) : null,
+        ));
+        return;
+      }
     }
 
     List<dynamic> scheme;
@@ -705,6 +740,18 @@ class MyAppState extends ChangeNotifier {
   }
 }
 
+enum Pages {
+//  generator(Icons.home, "Home"),
+//  favorites(Icons.favorite, "Favorites"),
+  teamSelection(Icons.list, "Teams"),
+  editor(Icons.edit_note, "Editor"),
+  settings(Icons.settings, "Settings"),
+  ;
+  final IconData icon;
+  final String title;
+  const Pages(this.icon, this.title);
+}
+
 class MyHomePage extends StatefulWidget {
   const MyHomePage({super.key});
 
@@ -720,34 +767,94 @@ class _MyHomePageState extends State<MyHomePage> {
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
     Widget page;
-    switch (selectedIndex) {
-      case 0:
+    Pages selectedPage = Pages.values[selectedIndex];
+    switch (selectedPage) {
+      /*case Pages.generator:
         page = const GeneratorPage();
-        break;
-      case 1:
+        break;*/
+      /*case Pages.favorites:
         page = const FavoritesPage();
-        break;
-      case 2:
+        break;*/
+      case Pages.teamSelection:
         page = TeamSelectionPage(() {
           setState(() {
-            selectedIndex = 3;
+            selectedIndex = Pages.editor.index;
           });
         });
         break;
-      case 3:
+      case Pages.editor:
         page = ExperimentsPage(() {
           setState(() {
-            selectedIndex = 2;
+            selectedIndex = Pages.teamSelection.index;
           });
         }); //experiments
         break;
-      case 4:
+      case Pages.settings:
         page = SettingsPage(); //settings
         break;
       default:
         throw UnimplementedError("No widget for $selectedIndex");
     }
-    return LayoutBuilder(
+    return ColorAdaptiveNavigationScaffold(
+      body: Container(
+        color: Theme
+            .of(context)
+            .colorScheme
+            .primaryContainer,
+        child: page,
+      ),
+      destinations: [
+        for (Pages page in Pages.values)
+          AdaptiveScaffoldDestination(title: page.title, icon: page.icon),
+        if (appState.teamColorReminder)
+          const AdaptiveScaffoldDestination(title: 'Switch Color', icon: Icons.invert_colors),
+      ],
+      selectedIndex: selectedIndex,
+      onDestinationSelected: (value) async {
+        if (value == Pages.values.length) { // last item isn't actually a page, but a selector
+          appState.teamColorBlue = !appState.teamColorBlue;
+          await appState.saveConfig();
+        } else {
+          setState(() {
+            if (selectedIndex != value && selectedIndex == Pages.settings.index && appState._unsavedChanges) { //if we're leaving the settings page, save the config
+              appState.saveConfig().then((_) {
+                setState(() {
+                  selectedIndex = value;
+                });
+              });
+            } else {
+              selectedIndex = value;
+            }
+          });
+        }
+      },
+      fabInRail: false,
+      navigationBackgroundColor: appState.teamColorReminder ? (appState.teamColorBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
+      floatingActionButton: selectedPage == Pages.settings ? null : (getWindowType(context) >= AdaptiveWindowType.medium ? Row.new : Column.new)(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          FloatingActionButton(
+            onPressed: appState.runSynchronization,
+            tooltip: "Synchronize data with server",
+            child: const Icon(
+              Icons.sync_alt,
+            ),
+          ),
+          const SizedBox(width: 10, height: 10),
+          FloatingActionButton(
+            onPressed: () async {
+              await appState.runSave(manual: true);
+            },
+            tooltip: "Save local data",
+            child: const Icon(
+              Icons.save_outlined,
+            ),
+          ),
+        ],
+      ),
+    );
+    /*return LayoutBuilder(
         builder: (context, constraints) {
           return Scaffold(
             body: Row(
@@ -785,12 +892,12 @@ class _MyHomePageState extends State<MyHomePage> {
                     ],
                     selectedIndex: selectedIndex,
                     onDestinationSelected: (value) async {
-                      if (value == 5) {
+                      if (value == Pages.values.length) { // last item isn't actually a page, but a selector
                         appState.teamColorBlue = !appState.teamColorBlue;
                         await appState.saveConfig();
                       } else {
                         setState(() {
-                          if (selectedIndex != value && selectedIndex == 4 && appState._unsavedChanges) { //if we're leaving the settings page, save the config
+                          if (selectedIndex != value && selectedIndex == Pages.settings.index && appState._unsavedChanges) { //if we're leaving the settings page, save the config
                             appState.saveConfig().then((_) {
                               setState(() {
                                 selectedIndex = value;
@@ -821,7 +928,8 @@ class _MyHomePageState extends State<MyHomePage> {
                 ),
               ],
             ),
-            floatingActionButton: Row(
+            // if we are on the settings page, don't display the floating buttons
+            floatingActionButton: selectedPage == Pages.settings ? null : Row(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
@@ -846,7 +954,7 @@ class _MyHomePageState extends State<MyHomePage> {
             ),
           );
         }
-    );
+    );*/
   }
 }
 
@@ -971,8 +1079,8 @@ class TeamSelectionPage extends StatelessWidget {
 
   final void Function() _viewTeam;
 
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "teamSelection");
-  final GlobalKey<FormFieldState<String>> _entryKey = GlobalKey<FormFieldState<String>>(debugLabel: "teamSelectionEntry");
+  static final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "teamSelection");
+  static final GlobalKey<FormFieldState<String>> _entryKey = GlobalKey<FormFieldState<String>>(debugLabel: "teamSelectionEntry");
 
   @override
   Widget build(BuildContext context) {
@@ -1072,6 +1180,7 @@ class TeamSelectionPage extends StatelessWidget {
                                           child: const Text("Continue"),
                                           onPressed: () {
                                             Navigator.of(context).pop();
+                                            _entryKey.currentState!.reset();
                                             print("Continuing with $teamNum");
                                             appState.builder?.initializeTeam(teamNum);
                                             appState.notifyListeners();
@@ -1126,9 +1235,15 @@ class ExperimentsPage extends StatelessWidget {
   }
 }
 
+bool _isQRScanningSupported() {
+  return Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+}
+
 class SettingsPage extends StatelessWidget {
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "settings");
+
+  final MobileScannerController _cameraController = MobileScannerController();
 
   SettingsPage({super.key});
 
@@ -1148,51 +1263,183 @@ class SettingsPage extends StatelessWidget {
             UnsavedChangesBar(theme: theme, initialValue: () => appState._unsavedChanges),
             Row(
               children: [
-                IconButton(
-                  onPressed: () async {
-                    if (appState.locked) {
-                      if (appState.builder != null) { //don't unlock if currently connecting - that could cause problems
-                        await appState.unlock();
-                      } else {
-                        showDialog(
-                          context: context,
-                          builder: (context) {
-                            return AlertDialog(
-                              title: const Text("Connecting"),
-                              content: const Text("Disconnecting while connecting can cause issues. Are you sure you want to disconnect?"),
-                              actions: [
-                                TextButton(
-                                  child: const Text("Cancel"),
-                                  onPressed: () {
-                                    Navigator.of(context).pop();
-                                  },
-                                ),
-                                TextButton(
-                                  child: const Text("Disconnect"),
-                                  onPressed: () async {
-                                    Navigator.of(context).pop();
-                                    await appState.unlock();
-                                  },
-                                ),
-                              ],
+                Column(
+                  children: [
+                    IconButton(
+                      onPressed: () async {
+                        if (appState.locked) {
+                          if (appState.builder != null) { //don't unlock if currently connecting - that could cause problems
+                            await appState.unlock();
+                          } else {
+                            showDialog(
+                              context: context,
+                              builder: (context) {
+                                return AlertDialog(
+                                  title: const Text("Connecting"),
+                                  content: const Text("Disconnecting while connecting can cause issues. Are you sure you want to disconnect?"),
+                                  actions: [
+                                    TextButton(
+                                      child: const Text("Cancel"),
+                                      onPressed: () {
+                                        Navigator.of(context).pop();
+                                      },
+                                    ),
+                                    TextButton(
+                                      child: const Text("Disconnect"),
+                                      onPressed: () async {
+                                        Navigator.of(context).pop();
+                                        await appState.unlock();
+                                      },
+                                    ),
+                                  ],
+                                );
+                              },
                             );
-                          },
-                        );
-                      }
-                    } else if (_formKey.currentState!.validate()) {
-                      await appState.connect();
-                    }
-                  },
-                  highlightColor: buttonColor,
-                  hoverColor: buttonColor,
-                  focusColor: buttonColor,
-                  icon: Icon(
-                    appState.locked ? Icons.lock_outlined : Icons.wifi,
-                    color: appState.locked ? (appState.builder == null ? Colors.amber : Colors.red) : Colors.green,
-                  ),
-                  tooltip: appState.locked
-                      ? (appState.builder == null ? "Connecting" : "Unlock connection settings")
-                      : "Connect",
+                          }
+                        } else if (_formKey.currentState!.validate()) {
+                          await appState.connect();
+                        }
+                      },
+                      highlightColor: buttonColor,
+                      hoverColor: buttonColor,
+                      focusColor: buttonColor,
+                      icon: Icon(
+                        appState.locked ? Icons.lock_outlined : Icons.wifi,
+                        color: appState.locked ? (appState.builder == null ? Colors.amber : Colors.red) : Colors.green,
+                      ),
+                      tooltip: appState.locked
+                          ? (appState.builder == null ? "Connecting" : "Unlock connection settings")
+                          : "Connect",
+                    ),
+                    if (appState.locked || _isQRScanningSupported())
+                      IconButton(
+                        onPressed: () {
+                          const identifier = "com.team1661.the_purple_alliance";
+                          if (appState.locked) { //provide connection data
+                            Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: ((context) {
+                                    return Scaffold(
+                                      appBar: AppBar(
+                                        title: const Text("Connection Data"),
+                                        centerTitle: true,
+                                      ),
+                                      body: Center(
+                                        child: QrImage(
+                                          data: jsonEncode({
+                                            "identifier": identifier,
+                                            "team_number": appState.getDisplayTeamNumber(),
+                                            "server": appState._serverUrl,
+                                            "password": appState._password,
+                                          }),
+                                          size: 280,
+                                        ),
+                                      ),
+                                    );
+                                  }),
+                                )
+                            );
+                          } else if (_isQRScanningSupported()) { //read connection data
+                            try {
+                              var alreadyGot = false; //prevent multiple handling of a qr code, which crashes Navigator
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: ((context) {
+                                    return Scaffold(
+                                      appBar: AppBar(
+                                        title: const Text("Scan"),
+                                        actions: [
+                                          IconButton(
+                                            color: Colors.white,
+                                            icon: ValueListenableBuilder(
+                                              valueListenable: _cameraController.torchState,
+                                              builder: (context, state, child) {
+                                                switch (state) {
+                                                  case TorchState.off:
+                                                    return const Icon(Icons.flash_off, color: Colors.grey);
+                                                  case TorchState.on:
+                                                    return const Icon(Icons.flash_on, color: Colors.yellow);
+                                                }
+                                              },
+                                            ),
+                                            iconSize: 32.0,
+                                            onPressed: () => _cameraController.toggleTorch(),
+                                          ),
+                                          IconButton(
+                                            color: Colors.white,
+                                            icon: ValueListenableBuilder(
+                                              valueListenable: _cameraController.cameraFacingState,
+                                              builder: (context, state, child) {
+                                                switch (state) {
+                                                  case CameraFacing.front:
+                                                    return const Icon(Icons.camera_front, color: Colors.blue);
+                                                  case CameraFacing.back:
+                                                    return const Icon(Icons.camera_rear, color: Colors.blue);
+                                                }
+                                              },
+                                            ),
+                                            iconSize: 32.0,
+                                            onPressed: () => _cameraController.switchCamera(),
+                                          ),
+                                        ],
+                                      ),
+                                      body: MobileScanner(
+                                        controller: _cameraController,
+                                        onDetect: (capture) {
+                                          final List<Barcode> barcodes = capture.barcodes;
+                                          debugPrint("barcodes: $barcodes");
+                                          for (final barcode in barcodes) {
+                                            if (alreadyGot) break;
+                                            if (barcode.format == BarcodeFormat.qrCode) {
+                                              var value = barcode.rawValue;
+                                              debugPrint("Found barcode: $value");
+                                              if (value != null) {
+                                                try {
+                                                  var decoded = jsonDecode(value);
+                                                  if (decoded is Map<String, dynamic> && decoded.containsKey("identifier") &&
+                                                      decoded["identifier"] == identifier && decoded["team_number"] is int &&
+                                                      decoded["server"] is String && decoded["password"] is String) {
+                                                    appState._teamNumberInProgress = decoded["team_number"];
+                                                    appState._serverUrlInProgress = decoded["server"];
+                                                    appState._password = decoded["password"];
+                                                    appState.scaffoldKey.currentState?.showSnackBar(const SnackBar(content: Text("Obtained connection data")));
+                                                    print("Connection data got!");
+                                                    alreadyGot = true;
+                                                    appState.notifyListeners();
+                                                    Navigator.pop(context);
+                                                    break;
+                                                  }
+                                                } catch (e) {
+                                                  // pass
+                                                }
+                                              }
+                                            }
+                                          }
+                                        },
+                                      ),
+                                    );
+                                  }),
+                                ),
+                              );
+                            } on MissingPluginException {
+                              appState.scaffoldKey.currentState?.showSnackBar(const SnackBar(
+                                content: Text("QR Scanning is not supported on your platform"),
+                              ));
+                            }
+                          } else {
+                            appState.scaffoldKey.currentState?.showSnackBar(const SnackBar(
+                              content: Text("QR Scanning is not supported on your platform"),
+                            ));
+                          }
+                        },
+                        icon: Icon(
+                          appState.locked ? Icons.qr_code : Icons.qr_code_scanner,
+                        ),
+                        tooltip: appState.locked ? "Show QR code" : "Scan QR code",
+                      ),
+                  ],
                 ),
                 const SizedBox(width: 8),
                 Expanded(
@@ -1290,15 +1537,15 @@ class SettingsPage extends StatelessWidget {
                     Row(
                       children: [
                         SizedBox(
-                          width: 200,
+                          width: 150,
                           child: Text(
                             "Colorful Team Buttons",
                             style: genericTextStyle.copyWith(
-                              fontSize: 16,
+                              fontSize: 12,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
+//                        const SizedBox(width: 2),
                         Switch(
                           value: appState.colorfulTeams,
                           onChanged: (value) {
@@ -1311,15 +1558,15 @@ class SettingsPage extends StatelessWidget {
                     Row(
                       children: [
                         SizedBox(
-                          width: 200,
+                          width: 150,
                           child: Text(
                             "Team Color Reminder",
                             style: genericTextStyle.copyWith(
-                              fontSize: 16,
+                              fontSize: 12,
                             ),
                           ),
                         ),
-                        const SizedBox(width: 10),
+//                        const SizedBox(width: 2),
                         Switch(
                           value: appState.teamColorReminder,
                           onChanged: (value) {
@@ -1337,7 +1584,7 @@ class SettingsPage extends StatelessWidget {
               children: [
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primaryContainer,
+                    backgroundColor: Colors.red,
                   ),
                   onPressed: () async {
                     showDialog(
@@ -1365,13 +1612,29 @@ class SettingsPage extends StatelessWidget {
                       },
                     );
                   },
-                  child: const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                    child: Text("Force sync data - will clear all local data"),
-                  )
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    child: Row(
+                      children: const [
+                        Icon(
+                          Icons.warning,
+                          color: Colors.black,
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                          "Force sync data\n(Will clear all local data)",
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: Colors.black,
+                          )
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ],
-            )
+            ),
+            const SizedBox(height: 2),
           ],
         ),
       ),
@@ -1476,7 +1739,20 @@ class _UnsavedChangesBarState extends State<UnsavedChangesBar> {
                 ),
               ),
               const Expanded(child: SizedBox()),
-              ElevatedButton.icon(
+              IconButton(
+                style: ButtonStyle(
+                  backgroundColor: MaterialStateProperty.all(widget.theme.primaryColorLight),
+                  visualDensity: VisualDensity.compact,
+                ),
+                onPressed: () async {
+                  await appState.saveConfig();
+                },
+                icon: Icon(
+                  Icons.save_outlined,
+                  color: widget.theme.primaryColorDark,
+                ),
+              ),
+/*              ElevatedButton.icon(
                 style: ButtonStyle(
                   backgroundColor: MaterialStateProperty.all(
                       widget.theme.primaryColorLight),
@@ -1485,17 +1761,21 @@ class _UnsavedChangesBarState extends State<UnsavedChangesBar> {
                 onPressed: () {
                   appState.saveConfig();
                 },
-                label: Text(
-                  "Save",
-                  style: TextStyle(
-                    color: widget.theme.primaryColorDark,
-                  ),
+                label: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return Text(
+                      "",//constraints.maxWidth > 1900 ? "Save" : "",
+                      style: TextStyle(
+                        color: widget.theme.primaryColorDark,
+                      ),
+                    );
+                  }
                 ),
                 icon: Icon(
                   Icons.save_outlined,
                   color: widget.theme.primaryColorDark,
                 ),
-              ),
+              ),*/
             ],
           ),
         )
