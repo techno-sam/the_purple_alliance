@@ -172,9 +172,10 @@ class MyAppState extends ChangeNotifier {
   }
 
   Future<File?> writeConfig(Map<String, dynamic> data) async {
-    return await compute((List<dynamic> args) async {
+/*    return await compute((List<dynamic> args) async {
       return await writeJsonFile(args[0], args[1]);
-    }, [_configFile, data]);
+    }, [_configFile, data]);*/
+    return await compute2(writeJsonFile, _configFile, data);
 //    return await writeJsonFile(_configFile, data);
   }
 
@@ -374,16 +375,18 @@ class MyAppState extends ChangeNotifier {
   }
 
   Future<File?> _setCachedScheme(List<dynamic>? data) async {
-    return await compute((List<dynamic> args) async {
+/*    return await compute((List<dynamic> args) async {
       return await writeJsonFile(args[0], args[1]);
-    }, [_schemeFile, data]);
+    }, [_schemeFile, data]);*/
+    return compute2(writeJsonFile, _schemeFile, data);
 //    return await writeJsonFile(_schemeFile, data);
   }
   
   Future<File?> _setCachedServerMeta(Map<String, dynamic>? data) async {
-    return await compute((List<dynamic> args) async {
+/*    return await compute((List<dynamic> args) async {
       return await writeJsonFile(args[0], args[1]);
-    }, [_cachedServerMetaFile, data]);
+    }, [_cachedServerMetaFile, data]);*/
+    return await compute2(writeJsonFile, _cachedServerMetaFile, data);
 //    return await writeJsonFile(_cachedServerMetaFile, data);
   }
   
