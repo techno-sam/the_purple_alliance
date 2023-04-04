@@ -7,6 +7,69 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
 
+class CommentList extends StatelessWidget {
+  const CommentList({
+    super.key,
+    required this.theme,
+    required this.comments,
+  });
+
+  final ThemeData theme;
+  final Map<String, String> comments;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: theme.primaryColorDark,
+      child: Column(
+        children: [
+          const Divider(color: Colors.black, indent: 20, endIndent: 20,),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(4.0),
+              child: Column(
+                children: [
+                  for (MapEntry<String, String> comment in comments.entries)
+                    SizedBox(
+                      height: 200,
+//                      aspectRatio: _isLargeScreen(context) ? 4 : _isMediumScreen(context) ? 3 : 2,
+                      child: Card(
+                        color: theme.primaryColorLight,
+                        elevation: 2,
+                        child: Container(
+                          margin: const EdgeInsets.all(4.0),
+                          padding: const EdgeInsets.all(4.0),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(comment.key, style: theme.textTheme.headlineSmall?.copyWith(color: theme.colorScheme.onSurface)),
+                              Divider(color: theme.colorScheme.onSurface, endIndent: 50),
+                              Expanded(
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: SingleChildScrollView(
+                                    child: Text(
+                                      comment.value,
+                                      style: TextStyle(color: theme.colorScheme.onSurface)
+                                    )
+                                  )
+                                )
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class StarRating extends StatefulWidget {
   const StarRating({
     super.key,
@@ -29,6 +92,11 @@ class StarRating extends StatefulWidget {
 
   @override
   State<StarRating> createState() => _StarRatingState(initialRating);
+}
+
+double roundDouble(double value, int places){
+  num mod = math.pow(10.0, places);
+  return ((value * mod).round().toDouble() / mod);
 }
 
 class _StarRatingState extends State<StarRating> {
@@ -74,7 +142,7 @@ class _StarRatingState extends State<StarRating> {
         if (widget.averageRating != null)
           const SizedBox(width: 4),
         if (widget.averageRating != null)
-          Text("Avg: ${widget.averageRating}/${widget.starCount+0.0}"),
+          Text("Avg: ${roundDouble(widget.averageRating ?? 0, 2)}/${widget.starCount+0.0}"),
       ],
     );
   }

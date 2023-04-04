@@ -18,6 +18,12 @@ import 'package:the_purple_alliance/widgets.dart';
 import 'package:the_purple_alliance/scouting_layout.dart';
 import 'package:the_purple_alliance/network.dart' as network;
 
+Future<R> compute2<R, A, B>(FutureOr<R> Function(A, B) callback, A arg1, B arg2) async {
+  return compute((List<dynamic> args) async {
+    return await callback(args[0], args[1]);
+  }, [arg1, arg2]);
+}
+
 void main() {
   initializeBuilders();
   if (kDebugMode) {
@@ -132,7 +138,7 @@ class MyAppState extends ChangeNotifier {
       print("reading $f");
       final contents = await f.readAsString();
       print("contents: $contents");
-      return jsonDecode(contents);
+      return await compute(jsonDecode, contents);
     } catch (e) {
       print(e);
       return null;
@@ -166,7 +172,10 @@ class MyAppState extends ChangeNotifier {
   }
 
   Future<File?> writeConfig(Map<String, dynamic> data) async {
-    return await writeJsonFile(_configFile, data);
+    return await compute((List<dynamic> args) async {
+      return await writeJsonFile(args[0], args[1]);
+    }, [_configFile, data]);
+//    return await writeJsonFile(_configFile, data);
   }
 
   Future<File?> saveConfig() {
@@ -236,7 +245,10 @@ class MyAppState extends ChangeNotifier {
       }
       if (shouldConnect) {
         locked = false;
+        print("Awaiting connection...");
+        notifyListeners();
         await connect(reconnecting: true);
+        print("Connected...");
       }
     }
     notifyListeners();
@@ -362,11 +374,17 @@ class MyAppState extends ChangeNotifier {
   }
 
   Future<File?> _setCachedScheme(List<dynamic>? data) async {
-    return await writeJsonFile(_schemeFile, data);
+    return await compute((List<dynamic> args) async {
+      return await writeJsonFile(args[0], args[1]);
+    }, [_schemeFile, data]);
+//    return await writeJsonFile(_schemeFile, data);
   }
   
   Future<File?> _setCachedServerMeta(Map<String, dynamic>? data) async {
-    return await writeJsonFile(_cachedServerMetaFile, data);
+    return await compute((List<dynamic> args) async {
+      return await writeJsonFile(args[0], args[1]);
+    }, [_cachedServerMetaFile, data]);
+//    return await writeJsonFile(_cachedServerMetaFile, data);
   }
   
   Future<Map<String, dynamic>?> get _cachedServerMeta async {
@@ -472,9 +490,9 @@ class MyAppState extends ChangeNotifier {
       notifyListeners();
       return;
     }
-    bool serverFound = await network.testUnauthorizedConnection(_serverUrl ?? "https://example.com");
+    bool serverFound = await compute(network.testUnauthorizedConnection, _serverUrl ?? "https://example.com");
     if (!reconnecting) { // first time we connect, ensure we have a proper connection
-      bool serverAuthorized = await network.testAuthorizedConnection(httpClient);
+      bool serverAuthorized = await compute(network.testAuthorizedConnection, httpClient);
       if (serverFound && serverAuthorized) {
         print("Server found and authorized");
         scaffoldKey.currentState?.showSnackBar(const SnackBar(
@@ -639,7 +657,7 @@ class MyAppState extends ChangeNotifier {
       print("Connection not yet initialized, can't sync");
       return;
     }
-    if (!await network.testAuthorizedConnection(httpClient)) {
+    if (!await compute(network.testAuthorizedConnection, httpClient)) {
       print("Not authorized or not connected, can't sync");
       scaffoldKey.currentState?.showSnackBar(const SnackBar(
         content: Text("Not authorized or not connected to server, can't sync"),
@@ -652,10 +670,11 @@ class MyAppState extends ChangeNotifier {
     /*******************/
     /* Begin Protected */
     /*******************/
-    try {
+    try { //1234567890
       Map<String, dynamic> toServer = builder!.teamManager.saveNetworkDeltas();
-      await network.sendDeltas(httpClient, toServer);
-      Map<String, dynamic>? fromServer = await network.getTeamData(httpClient);
+//      await network.sendDeltas(httpClient, toServer);
+      await compute2(network.sendDeltas, httpClient, toServer);
+      Map<String, dynamic>? fromServer = await compute(network.getTeamData, httpClient);
       builder!.teamManager.load(fromServer, false);
       scaffoldKey.currentState?.showSnackBar(const SnackBar(
         content: Text("Synced data with server"),
@@ -805,63 +824,71 @@ class _MyHomePageState extends State<MyHomePage> {
       default:
         throw UnimplementedError("No widget for $selectedIndex");
     }
-    return ColorAdaptiveNavigationScaffold(
-      body: Container(
-        color: Theme
-            .of(context)
-            .colorScheme
-            .primaryContainer,
-        child: page,
-      ),
-      destinations: [
-        for (Pages page in Pages.values)
-          AdaptiveScaffoldDestination(title: page.title, icon: page.icon),
-        if (appState.teamColorReminder)
-          const AdaptiveScaffoldDestination(title: 'Switch Color', icon: Icons.invert_colors),
-      ],
-      selectedIndex: selectedIndex,
-      onDestinationSelected: (value) async {
-        if (value == Pages.values.length) { // last item isn't actually a page, but a selector
-          appState.teamColorBlue = !appState.teamColorBlue;
-          await appState.saveConfig();
-        } else {
-          setState(() {
-            if (selectedIndex != value && selectedIndex == Pages.settings.index && appState._unsavedChanges) { //if we're leaving the settings page, save the config
-              appState.saveConfig().then((_) {
-                setState(() {
-                  selectedIndex = value;
-                });
-              });
-            } else {
-              selectedIndex = value;
-            }
-          });
-        }
+    return GestureDetector(
+      onTap: () {
+        print("Tapped somewhere!");
+        FocusManager.instance.primaryFocus?.unfocus();
       },
-      fabInRail: false,
-      navigationBackgroundColor: appState.teamColorReminder ? (appState.teamColorBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
-      floatingActionButton: selectedPage == Pages.settings ? null : (getWindowType(context) >= AdaptiveWindowType.medium ? Row.new : Column.new)(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.end,
-        children: [
-          FloatingActionButton(
-            onPressed: appState.runSynchronization,
-            tooltip: "Synchronize data with server",
-            child: const Icon(
-              Icons.sync_alt,
-            ),
-          ),
-          const SizedBox(width: 10, height: 10),
-          FloatingActionButton(
-            onPressed: () async {
-              await appState.runSave(manual: true);
-            },
-            tooltip: "Save local data",
-            child: const Icon(
-              Icons.save_outlined,
-            ),
-          ),
+      child: ColorAdaptiveNavigationScaffold(
+        body: Container(
+          color: Theme
+              .of(context)
+              .colorScheme
+              .primaryContainer,
+          child: page,
+        ),
+        destinations: [
+          for (Pages page in Pages.values)
+            AdaptiveScaffoldDestination(title: page.title, icon: page.icon),
+          if (appState.teamColorReminder)
+            const AdaptiveScaffoldDestination(title: 'Switch Color', icon: Icons.invert_colors),
         ],
+        selectedIndex: selectedIndex,
+        onDestinationSelected: (value) async {
+          if (value == Pages.values.length) { // last item isn't actually a page, but a selector
+            appState.teamColorBlue = !appState.teamColorBlue;
+            await appState.saveConfig();
+          } else {
+            setState(() {
+              if (selectedIndex != value && selectedIndex == Pages.settings.index && appState._unsavedChanges) { //if we're leaving the settings page, save the config
+                appState.saveConfig().then((_) {
+                  setState(() {
+                    selectedIndex = value;
+                  });
+                });
+              } else {
+                selectedIndex = value;
+              }
+            });
+          }
+        },
+        fabInRail: false,
+        navigationBackgroundColor: appState.teamColorReminder ? (appState.teamColorBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
+        floatingActionButton: selectedPage == Pages.settings ? null : (getWindowType(context) >= AdaptiveWindowType.medium ? Row.new : Column.new)(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.end,
+          children: [
+            FloatingActionButton(
+              heroTag: "runSync",
+              onPressed: appState.runSynchronization,
+              tooltip: "Synchronize data with server",
+              child: const Icon(
+                Icons.sync_alt,
+              ),
+            ),
+            const SizedBox(width: 10, height: 10),
+            FloatingActionButton(
+              heroTag: "saveData",
+              onPressed: () async {
+                await appState.runSave(manual: true);
+              },
+              tooltip: "Save local data",
+              child: const Icon(
+                Icons.save_outlined,
+              ),
+            ),
+          ],
+        ),
       ),
     );
     /*return LayoutBuilder(
@@ -1221,6 +1248,7 @@ class TeamSelectionPage extends StatelessWidget {
 class ExperimentsPage extends StatelessWidget {
 
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "scouting");
+  static final GlobalKey _scrollKey = GlobalKey(debugLabel: "scroll");
 
   ExperimentsPage(
       this.goToTeamSelectionPage,
@@ -1243,6 +1271,7 @@ class ExperimentsPage extends StatelessWidget {
               children: children
           )
               : SingleChildScrollView(
+            key: _scrollKey,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: children,

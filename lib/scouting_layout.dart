@@ -114,10 +114,15 @@ abstract class LabeledAndPaddedSynchronizedBuilder<T extends DataValue> extends 
 }
 
 class TextFieldWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<TextDataValue> {
-  TextFieldWidgetBuilder.fromJson(super.schemeData) : super.fromJson();
+
+  late final TextEditingController _controller;
+  TextFieldWidgetBuilder.fromJson(super.schemeData) : super.fromJson() {
+    _controller = TextEditingController(text: _dataValue?.value ?? TextDataValue.getDefault());
+  }
   
   @override
   Widget build(BuildContext context) {
+    _controller.text = _dataValue?.value ?? TextDataValue.getDefault();
     return Padding(
       padding: EdgeInsets.all(_padding ?? 8.0),
       child: Consumer<MyAppState>(
@@ -128,7 +133,8 @@ class TextFieldWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<TextDat
               border: const UnderlineInputBorder(),
               labelText: _label,
             ),
-            initialValue: _dataValue?.value ?? TextDataValue.getDefault(),
+            controller: _controller,
+//            initialValue: _dataValue?.value ?? TextDataValue.getDefault(),
             onChanged: (value) {
               _dataValue?.value = value;
             },
@@ -193,13 +199,14 @@ class StarRatingWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<StarRa
       padding: EdgeInsets.all(_padding ?? 8.0),
       child: Consumer<MyAppState>(
         builder: (context, appState, child) {
+//          print("Building star $_key, personal value: ${_dataValue?.personalValue}");
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(_label),
               const SizedBox(height: 2),
               StarRating(
-                key: Key(_key),
+                key: Key("$_key:rating_${_dataValue?.personalValue}"),
                 initialRating: _dataValue?.personalValue ?? 0,
                 averageRating: _dataValue?.averageValue,
                 onChanged: (value) {
@@ -215,6 +222,79 @@ class StarRatingWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<StarRa
   }
 }
 
+class CommentsWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<CommentsDataValue> {
+  late final TextEditingController _controller;
+  CommentsWidgetBuilder.fromJson(super.schemeData) : super.fromJson() {
+    _controller = TextEditingController(text: _dataValue?.personalComment ?? CommentsDataValue.getDefault());
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    var appState = context.watch<MyAppState>();
+    var heroTag = "comment_title_$_label:$_key";
+    _controller.text = _dataValue?.personalComment ?? CommentsDataValue.getDefault();
+    return Padding(
+      padding: EdgeInsets.all(_padding ?? 8.0),
+      child: Card(
+          color: theme.colorScheme.primaryContainer,
+          child: Container(
+              margin: const EdgeInsets.all(4.0),
+              padding: const EdgeInsets.all(4.0),
+              child: Column(
+                children: [
+                  Hero(tag: heroTag, child: Text(_label, style: theme.textTheme.headlineSmall)),
+                  const Divider(),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: ((context) {
+                                return Scaffold(
+                                  appBar: AppBar(
+                                    backgroundColor: theme.primaryColorDark,
+                                    title: Hero(tag: heroTag, child: Text(_label, style: theme.textTheme.headlineSmall)),
+                                    centerTitle: true,
+                                  ),
+                                  body: Center(
+                                    child: CommentList(
+                                      theme: theme,
+                                      comments: (_dataValue?.stringComments ?? {})..[appState.username] = _dataValue?.personalComment ?? "",
+                                    ),
+                                  ),
+                                );
+                              })
+                          )
+                      );
+                    },
+                    icon: const Icon(Icons.view_stream),
+                    label: const Text("View All Comments"),
+                  ),
+                  const Divider(),
+                  Text("Your comment", style: theme.textTheme.labelMedium),
+                  TextFormField(
+                    key: Key(_key),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                    ),
+                    minLines: 1,
+                    maxLines: 5,
+                    keyboardType: TextInputType.multiline,
+                    controller: _controller,
+//                    initialValue: _dataValue?.personalComment ?? CommentsDataValue.getDefault(),
+                    onChanged: (value) {
+                      _dataValue?.personalComment = value;
+                    },
+                  )
+                ],
+              )
+          )
+      ),
+    );
+  }
+}
+
 Map<String, JsonWidgetBuilder Function(Map<String, dynamic>)> widgetBuilders = {};
 
 void initializeBuilders() {
@@ -223,6 +303,7 @@ void initializeBuilders() {
   widgetBuilders["text_field"] = TextFieldWidgetBuilder.fromJson;
   widgetBuilders["dropdown"] = DropdownWidgetBuilder.fromJson;
   widgetBuilders["star_rating"] = StarRatingWidgetBuilder.fromJson;
+  widgetBuilders["comments"] = CommentsWidgetBuilder.fromJson;
   initializeValueHolders();
 }
 
