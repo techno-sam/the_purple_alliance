@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 final Map<Type, DataValue Function(Map<String, dynamic>)> _valueTypes = {};
 
 int _generateTimestamp() {
@@ -271,7 +273,7 @@ class DataManager {
                   }
                 }
               } else if (fromDisk) {
-                print("Invalid timestamp: $timestamp");
+                log("Invalid timestamp: $timestamp");
                 if (specialTimestampHandling) {
                   (entry.value as TimestampSpecialBehaviorMixin).fromJsonBackup(entryData["value"], fromDisk);
                 } else {

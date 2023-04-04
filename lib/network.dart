@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:http/http.dart' as http;
@@ -37,7 +38,7 @@ Future<bool> testUnauthorizedConnection(String url) async {
   } on TimeoutException {
     return false;
   } catch (e) {
-    print('Connection error: $e');
+    log('Connection error: $e');
     return false;
   }
   if (response.statusCode == 200) {
@@ -54,7 +55,7 @@ Future<bool> testAuthorizedConnection(Connection connection) async {
   } on TimeoutException {
     return false;
   } catch (e) {
-    print('Connection error: $e');
+    log('Connection error: $e');
     return false;
   }
   if (response.statusCode == 200) {
@@ -69,13 +70,13 @@ Future<List<dynamic>> getScheme(Connection connection) async {
   try {
     response = await connection.client.get(_getUri(connection.url, 'scheme.json'));
   } catch (e) {
-    print('Connection error: $e');
+    log('Connection error: $e');
     return [];
   }
   if (response.statusCode == 200) {
     var decoded = jsonDecode(response.body);
     if (decoded is List<dynamic>) {
-      print("Decoded: $decoded");
+      log("Decoded: $decoded");
       return decoded;
     }
   }
@@ -87,13 +88,13 @@ Future<Map<String, dynamic>> getServerMeta(Connection connection) async {
   try {
     response = await connection.client.get(_getUri(connection.url, 'meta.json'));
   } catch (e) {
-    print('Connection error: $e');
+    log('Connection error: $e');
     return {};
   }
   if (response.statusCode == 200) {
     var decoded = jsonDecode(response.body);
     if (decoded is Map<String, dynamic>) {
-      print("Decoded: $decoded");
+      log("Decoded: $decoded");
       return decoded;
     }
   }
@@ -110,7 +111,7 @@ Future<Map<String, dynamic>> getTeamData(Connection connection) async {
   if (response.statusCode == 200) {
     var decoded = jsonDecode(response.body);
     if (decoded is Map<String, dynamic>) {
-      print("Decoded: $decoded");
+      log("Decoded: $decoded");
       return decoded;
     } else {
       throw "Bad data format on fetch ${decoded.runtimeType}, expected Map<String, dynamic>";
@@ -128,7 +129,7 @@ Future<void> sendDeltas(Connection connection, Map<String, dynamic> data) async 
     rethrow;
   }
   if (response.statusCode == 200) {
-    print("Sent deltas");
+    log("Sent deltas");
   } else {
     throw "Bad status code on send: ${response.statusCode}";
   }

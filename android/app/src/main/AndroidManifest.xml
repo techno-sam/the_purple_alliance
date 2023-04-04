@@ -3,7 +3,7 @@
     <!-- Required to fetch data from the internet. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <application
-        android:label="the_purple_alliance"
+        android:label="The Purple Alliance"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

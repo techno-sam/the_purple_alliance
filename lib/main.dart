@@ -1,12 +1,12 @@
 import 'dart:convert';
 import 'dart:async';
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
 import 'package:adaptive_navigation/adaptive_navigation.dart';
 import 'package:english_words/english_words.dart';
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
@@ -27,7 +27,7 @@ Future<R> compute2<R, A, B>(FutureOr<R> Function(A, B) callback, A arg1, B arg2)
 void main() {
   initializeBuilders();
   if (kDebugMode) {
-    print("Enabling debug http overrides");
+    log("Enabling debug http overrides");
     HttpOverrides.global = network.DevHttpOverrides();
   }
   runApp(MyApp());
@@ -135,12 +135,16 @@ class MyAppState extends ChangeNotifier {
   Future<Object?> readJsonFile(Future<File> file) async {
     try {
       File f = await file;
-      print("reading $f");
+      if (kDebugMode) {
+        log("reading $f");
+      }
       final contents = await f.readAsString();
-      print("contents: $contents");
+      if (kDebugMode) {
+        log("contents: $contents");
+      }
       return await compute(jsonDecode, contents);
     } catch (e) {
-      print(e);
+      log('$e');
       return null;
     }
   }
@@ -156,13 +160,13 @@ class MyAppState extends ChangeNotifier {
       }
       return f.writeAsString(contents);
     } catch (e) {
-      print(e);
+      log('$e');
       return Future.value(null);
     }
   }
 
   Future<Map<String, dynamic>> readConfig() async {
-    print("reading config...");
+    log("reading config...");
     var config = await readJsonFile(_configFile);
     if (config is Map<String, dynamic>) {
       return config;
@@ -190,7 +194,7 @@ class MyAppState extends ChangeNotifier {
 
   Map<String, dynamic> get _config {
     _localPath.then((v) {
-      print(v);
+      log(v);
     });
     return {
       "colorful_teams": colorfulTeams,
@@ -208,9 +212,9 @@ class MyAppState extends ChangeNotifier {
   }
 
   _setConfig(Map<String, dynamic> jsonData) async {
-    print("Hello");
+    log("Hello");
     if (jsonData["colorful_teams"] is bool) {
-      print("Reading colorful teams ${jsonData["colorful_teams"]}");
+      log("Reading colorful teams ${jsonData["colorful_teams"]}");
       colorfulTeams = jsonData["colorful_teams"];
     }
     if (jsonData["team_color_reminder"] is bool) {
@@ -246,10 +250,10 @@ class MyAppState extends ChangeNotifier {
       }
       if (shouldConnect) {
         locked = false;
-        print("Awaiting connection...");
+        log("Awaiting connection...");
         notifyListeners();
         await connect(reconnecting: true);
-        print("Connected...");
+        log("Connected...");
       }
     }
     notifyListeners();
@@ -286,7 +290,7 @@ class MyAppState extends ChangeNotifier {
   String get _password => __password;
   set _password(String value) {
     if (locked) {
-      print("Attempted password set while locked!");
+      log("Attempted password set while locked!");
       return;
     }
     _unsavedChanges = true;
@@ -404,7 +408,7 @@ class MyAppState extends ChangeNotifier {
   }
 
   Future<List<dynamic>> getScheme() async {
-    print("Fetching scheme...");
+    log("Fetching scheme...");
     return await compute(network.getScheme, httpClient);
     /*return [
       {
@@ -448,7 +452,7 @@ class MyAppState extends ChangeNotifier {
       var cachedMeta = await _cachedServerMeta;
       var serverMeta = await getServerMeta();
       if (serverMeta["competition"] != cachedMeta?["competition"]) {
-        print("Competition changed, clearing cache");
+        log("Competition changed, clearing cache");
         var scheme = await getScheme();
         await _setCachedScheme(scheme);
         builder = safeLoadBuilder(scheme);
@@ -464,7 +468,7 @@ class MyAppState extends ChangeNotifier {
   Future<void> clearAllData() async {
     while (_noSync || _currentlySaving) {
       await Future.delayed(const Duration(milliseconds: 100));
-      print("Waiting for sync or save to be completed");
+      log("Waiting for sync or save to be completed");
     }
     _noSync = true;
     _currentlySaving = true;
@@ -485,9 +489,9 @@ class MyAppState extends ChangeNotifier {
     bool success2 = _setServer(_serverUrlInProgress);
     if (success1 && success2) {
       locked = true;
-      print("Connecting with team_number: $_teamNumber, url: $_serverUrl");
+      log("Connecting with team_number: $_teamNumber, url: $_serverUrl");
     } else {
-      print("Failed to connect ($_error)");
+      log("Failed to connect ($_error)");
       _teamNumber = null;
       _serverUrl = null;
       notifyListeners();
@@ -497,12 +501,12 @@ class MyAppState extends ChangeNotifier {
     if (!reconnecting) { // first time we connect, ensure we have a proper connection
       bool serverAuthorized = await compute(network.testAuthorizedConnection, httpClient);
       if (serverFound && serverAuthorized) {
-        print("Server found and authorized");
+        log("Server found and authorized");
         scaffoldKey.currentState?.showSnackBar(const SnackBar(
           content: Text("Connected to server"),
         ));
       } else if (serverFound) {
-        print("Server found but not authorized");
+        log("Server found but not authorized");
         scaffoldKey.currentState?.showSnackBar(const SnackBar(
           content: Text("Invalid credentials"),
         ));
@@ -512,7 +516,7 @@ class MyAppState extends ChangeNotifier {
         notifyListeners();
         return;
       } else {
-        print("Server not found");
+        log("Server not found");
         scaffoldKey.currentState?.showSnackBar(const SnackBar(
           content: Text("Server not found"),
         ));
@@ -523,7 +527,7 @@ class MyAppState extends ChangeNotifier {
         return;
       }
     }
-    print("initializing connection");
+    log("initializing connection");
     initializeBuilders();
     Map<String, dynamic>? cachedServerMeta = await _cachedServerMeta;
     Map<String, dynamic>? remoteServerMeta;
@@ -538,7 +542,7 @@ class MyAppState extends ChangeNotifier {
         _teamNumber = null;
         _serverUrl = null;
         notifyListeners();
-        print("Remote team $remoteTeamNumber does not match $myTeamNumber");
+        log("Remote team $remoteTeamNumber does not match $myTeamNumber");
         scaffoldKey.currentState?.clearSnackBars();
         scaffoldKey.currentState?.showSnackBar(SnackBar(
           content: Text("Server team wrong ($remoteTeamNumber), expected $myTeamNumber"),
@@ -565,7 +569,7 @@ class MyAppState extends ChangeNotifier {
           needsNewScheme = remoteServerMeta["scheme_version"] != cachedServerMeta["scheme_version"];
         }
         if (needsNewScheme) {
-          print("Scheme version mismatch, fetching new scheme...");
+          log("Scheme version mismatch, fetching new scheme...");
           scheme = await getScheme();
           _setCachedScheme(scheme);
         } else {
@@ -598,7 +602,7 @@ class MyAppState extends ChangeNotifier {
         }
       });
     } else {
-      print("At different competition, clearing previous data...");
+      log("At different competition, clearing previous data...");
     }
     if (checkedCompetition) {
       await _setCachedServerMeta(remoteServerMeta);
@@ -649,26 +653,26 @@ class MyAppState extends ChangeNotifier {
 
   Future<void> runSynchronization() async {
     if (_noSync) {
-      print("Already synchronizing...");
+      log("Already synchronizing...");
       return;
     }
     if (builder == null) {
-      print("No point in synchronizing non-existent data!");
+      log("No point in synchronizing non-existent data!");
       return;
     }
     if (!await checkCompetition()) {
-      print("Connection not yet initialized, can't sync");
+      log("Connection not yet initialized, can't sync");
       return;
     }
     if (!await compute(network.testAuthorizedConnection, httpClient)) {
-      print("Not authorized or not connected, can't sync");
+      log("Not authorized or not connected, can't sync");
       scaffoldKey.currentState?.showSnackBar(const SnackBar(
         content: Text("Not authorized or not connected to server, can't sync"),
       ));
       return;
     }
     WordPair pair = WordPair.random();
-    print("Synchronizing... !!! $_minutesSinceLastSync ${pair.asLowerCase}");
+    log("Synchronizing... !!! $_minutesSinceLastSync ${pair.asLowerCase}");
     _noSync = true;
     /*******************/
     /* Begin Protected */
@@ -682,9 +686,9 @@ class MyAppState extends ChangeNotifier {
       scaffoldKey.currentState?.showSnackBar(const SnackBar(
         content: Text("Synced data with server"),
       ));
-      print(pair.asLowerCase);
+      log(pair.asLowerCase);
     } catch (e) {
-      print("Error while synchronizing: $e");
+      log("Error while synchronizing: $e");
       scaffoldKey.currentState?.showSnackBar(SnackBar(
         content: const Text("Error while synchronizing"),
         action: SnackBarAction(
@@ -723,13 +727,17 @@ class MyAppState extends ChangeNotifier {
   Future<void> runSave({bool manual=false}) async {
     if (!_currentlySaving && builder != null) {
       while (_noSync) { // wait for sync to finish, to ensure that correct data is saved
-        print("Waiting for end of sync...");
+        if (kDebugMode) {
+          log("Waiting for end of sync...");
+        }
         await Future.delayed(const Duration(seconds: 1));
       }
       _noSync = true;
       _currentlySaving = true;
       await _setPreviousData(builder!.teamManager.save());
-      print("Saved...");
+      if (kDebugMode) {
+        log("Saved...");
+      }
       if (manual) {
         scaffoldKey.currentState?.showSnackBar(const SnackBar(
           content: Text("Saved!"),
@@ -764,9 +772,9 @@ class MyAppState extends ChangeNotifier {
       }
     });
     readConfig().then((v) async {
-      print("Read config: $v");
+      log("Read config: $v");
       await _setConfig(v);
-      print("Set.");
+      log("Set.");
       _noSync = false;
     });
   }
@@ -829,7 +837,7 @@ class _MyHomePageState extends State<MyHomePage> {
     }
     return GestureDetector(
       onTap: () {
-        print("Tapped somewhere!");
+        log("Tapped somewhere!");
         FocusManager.instance.primaryFocus?.unfocus();
       },
       child: ColorAdaptiveNavigationScaffold(
@@ -1115,7 +1123,7 @@ class TeamTile extends StatelessWidget {
 
 class TeamSelectionPage extends StatelessWidget {
 
-  TeamSelectionPage(this._viewTeam, {super.key});
+  const TeamSelectionPage(this._viewTeam, {super.key});
 
   final void Function() _viewTeam;
 
@@ -1201,7 +1209,7 @@ class TeamSelectionPage extends StatelessWidget {
                             if (value != null) {
                               var teamNum = int.tryParse(value);
                               if (teamNum != null && !teams.contains(teamNum)) {
-                                print('need to confirm team: ${_entryKey.currentState!.value}');
+                                log('need to confirm team: ${_entryKey.currentState!.value}');
                                 showDialog(
                                   context: context,
                                   builder: (context) {
@@ -1221,7 +1229,7 @@ class TeamSelectionPage extends StatelessWidget {
                                           onPressed: () {
                                             Navigator.of(context).pop();
                                             _entryKey.currentState!.reset();
-                                            print("Continuing with $teamNum");
+                                            log("Continuing with $teamNum");
                                             appState.builder?.initializeTeam(teamNum);
                                             appState.notifyListeners();
                                           }
@@ -1451,12 +1459,12 @@ class SettingsPage extends StatelessWidget {
                                         controller: _cameraController,
                                         onDetect: (capture) async {
                                           final List<Barcode> barcodes = capture.barcodes;
-                                          debugPrint("barcodes: $barcodes");
+                                          log("barcodes: $barcodes");
                                           for (final barcode in barcodes) {
                                             if (alreadyGot) break;
                                             if (barcode.format == BarcodeFormat.qrCode) {
                                               var value = barcode.rawValue;
-                                              debugPrint("Found barcode: $value");
+                                              log("Found barcode: $value");
                                               if (value != null) {
                                                 try {
                                                   var decoded = jsonDecode(value);
@@ -1466,9 +1474,9 @@ class SettingsPage extends StatelessWidget {
                                                     appState._teamNumberInProgress = decoded["team_number"];
                                                     appState._serverUrlInProgress = decoded["server"];
                                                     appState._password = decoded["password"];
-                                                    print("Decoded number: ${appState._teamNumberInProgress}");
+                                                    log("Decoded number: ${appState._teamNumberInProgress}");
                                                     appState.scaffoldKey.currentState?.showSnackBar(const SnackBar(content: Text("Obtained connection data")));
-                                                    print("Connection data got!");
+                                                    log("Connection data got!");
                                                     alreadyGot = true;
                                                     appState.notifyListeners();
                                                     Navigator.pop(context);

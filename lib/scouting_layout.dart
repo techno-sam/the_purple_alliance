@@ -1,3 +1,5 @@
+import 'dart:developer';
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
@@ -177,7 +179,7 @@ class DropdownWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<Dropdown
             onChanged: (value) {
               if (value != null) {
                 _dataValue?.value = value;
-                print("Set dropdown value to $value");
+                log("Set dropdown value to $value");
               }
             },
             value: _dataValue?.value,
@@ -199,7 +201,7 @@ class StarRatingWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<StarRa
       padding: EdgeInsets.all(_padding ?? 8.0),
       child: Consumer<MyAppState>(
         builder: (context, appState, child) {
-//          print("Building star $_key, personal value: ${_dataValue?.personalValue}");
+//          log("Building star $_key, personal value: ${_dataValue?.personalValue}");
           return Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -311,7 +313,7 @@ ExperimentBuilder? safeLoadBuilder(List<dynamic> data) {
   try {
     return ExperimentBuilder.fromJson(data);
   } catch (e) {
-    print(e);
+    log('$e');
     return null;
   }
 }
