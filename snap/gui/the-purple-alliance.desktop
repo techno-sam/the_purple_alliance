@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=The Purple Alliance
+Comment=A scouting app for First Robotics Competitions
+Exec=the-purple-alliance
+Icon=${SNAP}/meta/gui/the-purple-alliance.png # replace name to your app name
+Terminal=false
+Type=Application
+Categories=Education; #adjust accordingly your snap category

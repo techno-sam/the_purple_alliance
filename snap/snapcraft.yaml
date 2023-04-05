@@ -1,0 +1,28 @@
+name: the-purple-alliance
+version: 0.1.0
+summary: The Purple Alliance
+description: A scouting app for First Robotics Competitions
+
+confinement: strict
+base: core18
+grade: stable
+
+slots:
+  dbus-the-purple-alliance: # adjust accordingly to your app name
+    interface: dbus
+    bus: session
+    name: com.team1661.the_purple_alliance # adjust accordingly to your app name and
+
+apps:
+  the-purple-alliance:
+    command: the_purple_alliance
+    extensions: [flutter-master] # Where "master" defines which Flutter channel to use for the build
+    plugs:
+      - network
+    slots:
+      - dbus-the-purple-alliance
+parts:
+  the-purple-alliance:
+    source: .
+    plugin: flutter
+    flutter-target: lib/main.dart # The main entry-point file of the application
