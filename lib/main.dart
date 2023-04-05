@@ -19,7 +19,9 @@ import 'package:the_purple_alliance/scouting_layout.dart';
 import 'package:the_purple_alliance/network.dart' as network;
 
 Future<R> compute2<R, A, B>(FutureOr<R> Function(A, B) callback, A arg1, B arg2) async {
-  return compute((List<dynamic> args) async {
+  //log("Compute2 with arg types: ${callback.runtimeType}, ${arg1.runtimeType}, ${arg2.runtimeType}");
+  return await compute((List<dynamic> args) async {
+    //print("before calling callback");
     return await callback(args[0], args[1]);
   }, [arg1, arg2]);
 }
@@ -149,19 +151,23 @@ class MyAppState extends ChangeNotifier {
     }
   }
 
-  Future<File?> writeJsonFile(Future<File> file, Object? data) async {
+  static Future<File?> writeJsonFile(FutureOr<File> file, Object? data) async {
+//    print("start of write json file");
     try {
+//      print("about to await file");
       final f = await file;
+//      print("got file");
       String contents;
       if (data != null) {
         contents = jsonEncode(data);
       } else {
         contents = "";
       }
-      return f.writeAsString(contents);
+//      print("ready to write contents: $contents");
+      return await f.writeAsString(contents);
     } catch (e) {
-      log('$e');
-      return Future.value(null);
+      log('Error in writeJsonFile: $e');
+      return Future.value(file);
     }
   }
 
@@ -179,12 +185,12 @@ class MyAppState extends ChangeNotifier {
 /*    return await compute((List<dynamic> args) async {
       return await writeJsonFile(args[0], args[1]);
     }, [_configFile, data]);*/
-    return await compute2(writeJsonFile, _configFile, data);
+    return await compute2(writeJsonFile, await _configFile, data);
 //    return await writeJsonFile(_configFile, data);
   }
 
-  Future<File?> saveConfig() {
-    return writeConfig(_config).then(
+  Future<File?> saveConfig() async {
+    return await writeConfig(_config).then(
         (v) {
           _unsavedChanges = false;
           return v;
@@ -382,7 +388,7 @@ class MyAppState extends ChangeNotifier {
 /*    return await compute((List<dynamic> args) async {
       return await writeJsonFile(args[0], args[1]);
     }, [_schemeFile, data]);*/
-    return compute2(writeJsonFile, _schemeFile, data);
+    return await compute2(writeJsonFile, await _schemeFile, data);
 //    return await writeJsonFile(_schemeFile, data);
   }
   
@@ -390,7 +396,7 @@ class MyAppState extends ChangeNotifier {
 /*    return await compute((List<dynamic> args) async {
       return await writeJsonFile(args[0], args[1]);
     }, [_cachedServerMetaFile, data]);*/
-    return await compute2(writeJsonFile, _cachedServerMetaFile, data);
+    return await compute2(writeJsonFile, await _cachedServerMetaFile, data);
 //    return await writeJsonFile(_cachedServerMetaFile, data);
   }
   
@@ -1835,6 +1841,7 @@ class _UnsavedChangesBarState extends State<UnsavedChangesBar> {
                 ),
                 onPressed: () async {
                   await appState.saveConfig();
+                  print("happy with result");
                 },
                 icon: Icon(
                   Icons.save_outlined,
