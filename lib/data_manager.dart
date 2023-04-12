@@ -1,4 +1,13 @@
+import 'dart:convert';
 import 'dart:developer';
+import 'dart:io';
+
+import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart';
+import 'package:image/image.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:the_purple_alliance/network.dart';
+import 'package:the_purple_alliance/util.dart';
 
 final Map<Type, DataValue Function(Map<String, dynamic>)> _valueTypes = {};
 
@@ -382,5 +391,216 @@ class TeamDataManager {
       }
     }
     return data;
+  }
+}
+
+class ImageRecord {
+  final String hash;
+  final String author;
+  final String description;
+  final int team;
+
+  ImageRecord(this.hash, this.author, this.description, this.team) {
+    for (var character in hash.characters) {
+      if (!("0123456789abcdef".contains(character))) {
+        throw "Illegal hash passed to image record, aborting";
+      }
+    }
+  }
+
+
+  @override
+  bool operator ==(Object other) {
+    if (other is! ImageRecord) {
+      return false;
+    }
+    return hash == other.hash && author == other.author && description == other.description && team == other.team;
+  }
+
+  static ImageRecord? fromJson(dynamic item) {
+    if (item is Map<String, dynamic>) {
+      var author = item['author'];
+      var description = item['description'];
+      var hash = item['hash'];
+      var team = item['team'];
+      if (author is String && description is String && hash is String && team is int) {
+        return ImageRecord(hash, author, description, team);
+      }
+    }
+    return null;
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'author': author,
+      'description': description,
+      'hash': hash,
+      'team': team
+    };
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(hash, author, description, team);
+  }
+}
+
+const int _jpgQuality = 90;
+
+class ImageSyncManager extends ChangeNotifier {
+  final List<Pair<String, ImageRecord>> _toCopy = []; // images needing to be copied from temp storage to permanent image cache don't write to disk (cache images may no longer exist)
+  final List<ImageRecord> _copied = []; // already copied images, don't write to disk (cache images may no longer exist)
+  final List<Pair<String, ImageRecord>> _toUpload = []; // images to be uploaded, key is a path to the image if it is in temp storage (write to disk)
+  final List<String> _toDownload = []; // just a list of hashes, metadata is not yet present (don't write to disk, dynamically determined)
+  final List<ImageRecord> _loadedImages = []; // write to disk, this is what we already have
+  
+  ImageSyncManager();
+  
+  Future<void> addTakenPicture(int team, String author, String description, String file) async {
+    File imageFile = File(file);
+    if (!await imageFile.exists()) {
+      return;
+    }
+    imageFile.readAsStringSync().hashCode;
+  }
+
+  Future<String> get _localPath async {
+    final directory = await getApplicationDocumentsDirectory();
+
+    return "${directory.path}/the_purple_alliance/images";
+  }
+
+  Future<File> get _dataFile async {
+    final path = await _localPath;
+    await Directory(path).create(recursive: true);
+    return File('$path/data.json');
+  }
+
+  Future<File> _getImageFile(String hash) async {
+    assert (hash.length >= 2);
+    final path = await _localPath;
+    final imagePath = '$path/${hash.substring(0, 2)}';
+    await Directory(imagePath).create(recursive: true);
+    return File('$imagePath/$hash.jpg');
+  }
+
+  Future<void> runDownload(Connection connection) async {
+    if (_toDownload.isNotEmpty) {
+      final String downloadHash = _toDownload.removeAt(0);
+      var imageData = await compute2(getImage, connection, downloadHash);//await getImage(connection, downloadTarget.hash);
+      var record = await(compute2(getImageMeta, connection, downloadHash));
+      if (imageData != null && record != null) {
+        var file = await _getImageFile(downloadHash);
+        await file.writeAsBytes(imageData, flush: true);
+        _loadedImages.add(record);
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> runCopy() async {
+    if (_toCopy.isNotEmpty) {
+      final Pair<String, ImageRecord> data = _toCopy.removeAt(0);
+      final sourceFile = File(data.first);
+      final destFile = await _getImageFile(data.second.hash);
+      final image = decodeImage(await sourceFile.readAsBytes());
+      if (image != null) {
+        final Uint8List jpg = encodeJpg(image, quality: _jpgQuality);
+        await destFile.writeAsBytes(jpg);
+        _copied.add(data.second);
+//        _loadedImages.add(data.second);
+        String newHash = sha256Hash(jpg);
+        _loadedImages.add(ImageRecord(newHash, data.second.author, data.second.description, data.second.team));
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<void> runUpload(Connection connection) async {
+    if (_toUpload.isNotEmpty) {
+      final Pair<String, ImageRecord> data = _toUpload.removeAt(0);
+      try {
+        File srcFile;
+        bool needsConversion = false;
+        if (_copied.contains(data.second)) {
+          srcFile = await _getImageFile(data.second.hash);
+        } else {
+          srcFile = File(data.first);
+          needsConversion = true;
+          if (!(await srcFile.exists())) {
+            srcFile = await _getImageFile(data.second.hash);
+            needsConversion = false;
+          }
+        }
+        if (!(await srcFile.exists())) {
+          return;
+        }
+        Uint8List imgData = await srcFile.readAsBytes();
+        if (needsConversion) {
+          var decoded = decodeImage(imgData);
+          if (decoded == null) {
+            return;
+          }
+          imgData = encodeJpg(decoded, quality: _jpgQuality);
+        }
+        await uploadImage(connection, data.second, imgData);
+      } catch (e) {
+        log('Error during upload: $e');
+        _toUpload.add(data);
+      }
+    }
+  }
+
+  Future<void> load() async {
+    final file = await _dataFile;
+    dynamic decoded;
+    try {
+      decoded = compute(jsonDecode, await file.readAsString());
+    } catch (e) {
+      log('Exception while loading image metadata store: $e');
+      return;
+    }
+    if (decoded is Map<String, dynamic>) {
+      _loadedImages.clear();
+      var imageMeta = decoded['image_meta'];
+      if (imageMeta is List<dynamic>) {
+        for (dynamic item in imageMeta) {
+          ImageRecord? record = ImageRecord.fromJson(item);
+          if (record != null) {
+            _loadedImages.add(record);
+          }
+        }
+      }
+      var uploadData = decoded['to_upload'];
+      if (uploadData is Map<String, dynamic>) {
+        _toUpload.clear();
+        for (MapEntry<String, dynamic> entry in uploadData.entries) {
+          ImageRecord? record = ImageRecord.fromJson(entry.value);
+          if (record != null) {
+            _toUpload.add(Pair.of(entry.key, record));
+          }
+        }
+      }
+      notifyListeners();
+    } else {
+      log('Invalid data format for image metadata store ${decoded.runtimeType}');
+    }
+  }
+
+  Future<void> save() async {
+    List<Map<String, dynamic>> imageMeta = [
+      for (ImageRecord record in _loadedImages)
+        record.toJson()
+    ];
+    Map<String, Map<String, dynamic>> uploadData = {};
+    for (Pair<String, ImageRecord> entry in _toUpload) {
+      uploadData[entry.first] = entry.second.toJson();
+    }
+    String data = await compute(jsonEncode, {
+      'image_meta': imageMeta,
+      'to_upload': uploadData
+    });
+    final file = await _dataFile;
+    await file.writeAsString(data);
   }
 }

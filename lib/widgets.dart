@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:io';
 
 import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
 import 'package:adaptive_navigation/adaptive_navigation.dart';
@@ -6,6 +7,151 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
+import 'package:camera/camera.dart';
+
+class CardPicture extends StatelessWidget {
+  CardPicture({this.onTap, this.imagePath});
+
+  final Function()? onTap;
+  final String? imagePath;
+
+  @override
+  Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+
+    if (imagePath != null) {
+      return Card(
+        child: Container(
+          height: 300,
+          padding: EdgeInsets.all(10.0),
+          width: size.width * .70,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.all(Radius.circular(4.0)),
+            image: DecorationImage(
+                fit: BoxFit.cover, image: FileImage(File(imagePath as String))),
+          ),
+
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.end,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.redAccent,
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black,
+                        offset: Offset(3.0, 3.0),
+                        blurRadius: 2.0,
+                      )
+                    ]
+                ),
+                child: IconButton(onPressed: (){
+                  print('icon press');
+                }, icon: Icon(Icons.delete, color: Colors.white)),
+              )
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+        elevation: 3,
+        child: InkWell(
+          onTap: this.onTap,
+          child: Container(
+            padding: EdgeInsets.symmetric(vertical: 18, horizontal: 25),
+            width: size.width * .70,
+            height: 100,
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Attach Picture',
+                  style: TextStyle(fontSize: 17.0, color: Colors.grey[600]),
+                ),
+                Icon(
+                  Icons.photo_camera,
+                  color: Colors.indigo[400],
+                )
+              ],
+            ),
+          ),
+        ));
+  }
+}
+
+class TakePhoto extends StatefulWidget {
+  final CameraDescription? camera;
+
+  TakePhoto({super.key, this.camera});
+
+  @override
+  State<TakePhoto> createState() => _TakePhotoState();
+}
+
+class _TakePhotoState extends State<TakePhoto> {
+  late CameraController _controller;
+  late Future<void> _initializeControllerFuture;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = CameraController(
+      widget.camera as CameraDescription,
+      ResolutionPreset.medium,
+    );
+
+    _initializeControllerFuture = _controller.initialize();
+  }
+
+  Future<XFile?> takePicture() async {
+    if (_controller.value.isTakingPicture) {
+      return null;
+    }
+
+    try {
+      XFile file = await _controller.takePicture();
+      return file;
+    } on CameraException catch (e) {
+      print(e);
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Take picture'),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () async {
+          final file = await takePicture();
+          Navigator.of(context).pop(file?.path);
+        },
+        child: Icon(Icons.camera_alt),
+      ),
+
+      body: FutureBuilder<void>(
+        future: _initializeControllerFuture,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.done) {
+            return Container(
+              child: CameraPreview(_controller),
+            );
+          } else {
+            return const Center(child: CircularProgressIndicator());
+          }
+        }
+      )
+    );
+  }
+}
 
 class CommentList extends StatelessWidget {
   const CommentList({
@@ -256,13 +402,11 @@ enum SyncInterval {
 class SyncTimeSelector extends StatelessWidget {
   const SyncTimeSelector({
     super.key,
-    required this.theme,
   });
-
-  final ThemeData theme;
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
     var dropdownTextColor = theme.colorScheme.onPrimaryContainer;
     var appState = context.watch<MyAppState>();
     TextStyle style = TextStyle(
@@ -297,6 +441,67 @@ class SyncTimeSelector extends StatelessWidget {
       },
       dropdownColor: theme.colorScheme.primaryContainer,
       value: appState.syncInterval,
+    );
+  }
+}
+
+enum ImageSyncMode {
+  all(description: "All Images", icon: Icons.cloud_sync),
+  selected(description: "Selected Team", icon: Icons.sync_problem),
+  manual(description: "Manual", icon: Icons.sync_disabled)
+  ;
+  final String description;
+  final IconData icon;
+
+  const ImageSyncMode({required this.description, required this.icon});
+
+  static ImageSyncMode fromName(String name) {
+    return ImageSyncMode.values.firstWhere((element) => element.name == name, orElse: () => ImageSyncMode.manual);
+  }
+}
+
+class ImageSyncSelector extends StatelessWidget {
+  const ImageSyncSelector({
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    var dropdownTextColor = theme.colorScheme.onPrimaryContainer;
+    var appState = context.watch<MyAppState>();
+    TextStyle style = TextStyle(
+      color: dropdownTextColor,
+    );
+    return DropdownButtonFormField(
+      items: [
+        for (ImageSyncMode mode in ImageSyncMode.values)
+          DropdownMenuItem(
+              value: mode,
+              child: Row(
+                children: [
+                  Icon(
+                      mode.icon,
+                      color: dropdownTextColor
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                      mode.description,
+                      style: style
+                  ),
+                ],
+              )
+          ),
+      ],
+      onChanged: (value) {
+        if (value is ImageSyncMode) {
+          appState.imageSyncMode = value;
+        } else {
+          appState.imageSyncMode = ImageSyncMode.manual;
+        }
+      },
+      dropdownColor: theme.colorScheme.primaryContainer,
+      value: appState.imageSyncMode,
     );
   }
 }

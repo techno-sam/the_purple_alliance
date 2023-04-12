@@ -46,6 +46,10 @@ dependencies:
   mobile_scanner: ^3.2.0
   adaptive_navigation: ^0.0.9
   adaptive_breakpoints: ^0.1.6
+  camera: ^0.10.4
+  image: ^4.0.15
+  crypto: ^3.0.2
+  http_parser: ^4.0.2
 
 dev_dependencies:
   flutter_test:

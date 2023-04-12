@@ -2,9 +2,20 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_auth/http_auth.dart' as http_auth;
+import 'package:http_parser/http_parser.dart' as http_parser;
+import 'package:crypto/crypto.dart' as crypto;
+import 'package:the_purple_alliance/data_manager.dart';
+import 'package:the_purple_alliance/util.dart';
+
+String sha256Hash(Uint8List data) {
+  var digest = crypto.sha256.convert(data).toString();
+  return digest;
+}
 
 class DevHttpOverrides extends HttpOverrides {
   @override
@@ -118,6 +129,67 @@ Future<Map<String, dynamic>> getTeamData(Connection connection) async {
     }
   } else {
     throw "Bad status code on fetch: ${response.statusCode}";
+  }
+}
+
+Future<Uint8List?> getImage(Connection connection, String hash) async {
+  http.Response response;
+  try {
+    response = await connection.client.get(_getUri(connection.url, 'image/$hash'));
+  } catch (e) {
+    log('Image download error: $e');
+    return null;
+  }
+  if (response.statusCode == 200) {
+    return response.bodyBytes;
+  } else {
+    log('Invalid status code for image ${response.statusCode}');
+    return null;
+  }
+}
+
+Future<ImageRecord?> getImageMeta(Connection connection, String hash) async {
+  http.Response response;
+  try {
+    response = await connection.client.get(_getUri(connection.url, 'image_meta/$hash'));
+  } catch (e) {
+    log('Image meta download error: $e');
+    return null;
+  }
+  if (response.statusCode == 200) {
+    var decoded = await compute(jsonDecode, response.body);
+    if (decoded is Map<String, dynamic>) {
+      String author = typeOr(decoded["author"], "Unknown");
+      String description = typeOr(decoded["descripion"], "Unknown");
+      int team = int.parse(decoded["team"]); // the team is essential, if we don't get it, there is nothing to be shown
+      return ImageRecord(hash, author, description, team);
+    } else {
+      log('Invalid meta info for image $decoded');
+      return null;
+    }
+  } else {
+    log('Invalid status code for image meta ${response.statusCode}');
+    return null;
+  }
+}
+
+Future<void> uploadImage(Connection connection, ImageRecord record, Uint8List data)  async {
+  http.StreamedResponse response;
+  try {
+    response = await connection.client.send(
+        http.MultipartRequest('POST', _getUri(connection.url, 'img_upload'))
+          ..fields['description'] = record.description
+          ..fields['hash'] = record.hash
+          ..fields['team'] = '${record.team}'
+          ..files.add(http.MultipartFile.fromBytes('image', data, contentType: http_parser.MediaType("image", "jpg")))
+    );
+  } catch (e) {
+    rethrow;
+  }
+  if (response.statusCode == 200) {
+    log("Uploaded Image");
+  } else {
+    throw "Bad status code on image upload: ${response.statusCode}";
   }
 }
 

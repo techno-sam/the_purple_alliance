@@ -5,6 +5,7 @@ import 'dart:io';
 
 import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
 import 'package:adaptive_navigation/adaptive_navigation.dart';
+import 'package:camera/camera.dart';
 import 'package:english_words/english_words.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -13,18 +14,13 @@ import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:the_purple_alliance/data_manager.dart';
 
 import 'package:the_purple_alliance/widgets.dart';
 import 'package:the_purple_alliance/scouting_layout.dart';
 import 'package:the_purple_alliance/network.dart' as network;
+import 'package:the_purple_alliance/util.dart';
 
-Future<R> compute2<R, A, B>(FutureOr<R> Function(A, B) callback, A arg1, B arg2) async {
-  //log("Compute2 with arg types: ${callback.runtimeType}, ${arg1.runtimeType}, ${arg2.runtimeType}");
-  return await compute((List<dynamic> args) async {
-    //print("before calling callback");
-    return await callback(args[0], args[1]);
-  }, [arg1, arg2]);
-}
 
 void main() {
   initializeBuilders();
@@ -103,6 +99,8 @@ class MyAppState extends ChangeNotifier {
     }
     notifyListeners();
   }
+  
+  final ImageSyncManager imageSyncManager = ImageSyncManager();
 
   Future<String> get _localPath async {
     final directory = await getApplicationDocumentsDirectory();
@@ -207,6 +205,7 @@ class MyAppState extends ChangeNotifier {
       "team_color_reminder": teamColorReminder,
       "team_color_blue": teamColorBlue,
       "sync_interval": syncInterval.name,
+      "image_sync_mode": imageSyncMode.name,
       "connection": {
         "locked": locked,
         "team_number": locked ? _teamNumber ?? _teamNumberInProgress : _teamNumberInProgress,
@@ -231,6 +230,9 @@ class MyAppState extends ChangeNotifier {
     }
     if (jsonData["sync_interval"] is String) {
       syncInterval = SyncInterval.fromName(jsonData["sync_interval"]);
+    }
+    if (jsonData["image_sync_mode"] is String) {
+      imageSyncMode = ImageSyncMode.fromName(jsonData["image_sync_mode"]);
     }
     if (jsonData["connection"] is Map) {
       var connection = jsonData["connection"];
@@ -308,6 +310,13 @@ class MyAppState extends ChangeNotifier {
   set syncInterval(SyncInterval value) {
     _unsavedChanges = true;
     _syncInterval = value;
+  }
+
+  ImageSyncMode _imageSyncMode = ImageSyncMode.manual;
+  ImageSyncMode get imageSyncMode => _imageSyncMode;
+  set imageSyncMode(ImageSyncMode value) {
+    _unsavedChanges = true;
+    _imageSyncMode = value;
   }
 
   bool _colorfulTeams = true;
@@ -780,6 +789,7 @@ class MyAppState extends ChangeNotifier {
     readConfig().then((v) async {
       log("Read config: $v");
       await _setConfig(v);
+      imageSyncManager.load();
       log("Set.");
       _noSync = false;
     });
@@ -792,6 +802,7 @@ enum Pages {
   teamSelection(Icons.list, "Teams"),
   editor(Icons.edit_note, "Editor"),
   settings(Icons.settings, "Settings"),
+  cameraTest(Icons.camera, "Camera Test"),
   ;
   final IconData icon;
   final String title;
@@ -837,6 +848,9 @@ class _MyHomePageState extends State<MyHomePage> {
         break;
       case Pages.settings:
         page = SettingsPage(); //settings
+        break;
+      case Pages.cameraTest:
+        page = TestCameraPage();
         break;
       default:
         throw UnimplementedError("No widget for $selectedIndex");
@@ -1613,7 +1627,13 @@ class SettingsPage extends StatelessWidget {
                       "Sync interval",
                       style: genericTextStyle,
                     ),
-                    SyncTimeSelector(theme: theme),
+                    const SyncTimeSelector(),
+                    const SizedBox(height: 12),
+                    Text(
+                      "Image sync",
+                      style: genericTextStyle,
+                    ),
+                    const ImageSyncSelector(),
                   ],
                 ),
               ),
@@ -1726,6 +1746,72 @@ class SettingsPage extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 2),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class TestCameraPage extends StatefulWidget {
+  TestCameraPage({super.key});
+
+  @override
+  State<TestCameraPage> createState() => _TestCameraPageState();
+}
+
+class _TestCameraPageState extends State<TestCameraPage> {
+  late CameraDescription _cameraDescription;
+  List<String> _images = [];
+
+  @override
+  void initState() {
+    super.initState();
+    availableCameras().then((cameras) {
+      final camera = cameras
+          //.where((camera) => camera.lensDirection == CameraLensDirection.back)
+          .toList()
+          .first;
+      setState(() {
+        _cameraDescription = camera;
+      });
+      print("Setup camera");
+    }).catchError((err) {
+      print(err);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(top: 20.0, bottom: 20.0),
+        child: Column(
+          children: [
+            Text("Camera test"),
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 10.0),
+              height: 400,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                children: [
+                  CardPicture(
+                    onTap: () async {
+                      final String? imagePath = await Navigator.of(context)
+                          .push(MaterialPageRoute(
+                          builder: (_) => TakePhoto(camera: _cameraDescription)
+                      ));
+                      log("imagePath: $imagePath");
+                      if (imagePath != null) {
+                        setState(() {
+                          _images.add(imagePath);
+                        });
+                      }
+                    }
+                  )
+                ] + _images.map((String path) => CardPicture(imagePath: path)).toList()
+              ),
+            ),
           ],
         ),
       ),
