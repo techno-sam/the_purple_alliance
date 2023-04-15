@@ -397,7 +397,7 @@ class TeamDataManager {
 }
 
 class ImageRecord {
-  final String hash;
+  final String hash; //FIXME hash bad, use uuid.
   final String author;
   final List<String> tags;
   final int team;
@@ -533,7 +533,6 @@ class ImageSyncManager extends ChangeNotifier {
     if (!await imageFile.exists()) {
       return;
     }
-    _toUpload.add(Pair.of(file, ImageRecord("", author, tags, team)));
     _toCopy.add(Pair.of(file, ImageRecord(sha256Hash(await imageFile.readAsBytes()), author, tags, team)));
   }
 
@@ -629,6 +628,10 @@ class ImageSyncManager extends ChangeNotifier {
       if (image != null) {
         final Uint8List jpg = encodeJpg(image, quality: _jpgQuality);
         String newHash = sha256Hash(jpg);
+        if (_knownImages.map((element) => element.hash).contains(newHash)) {
+          return;
+        }
+        _toUpload.add(Pair.of(data.first, ImageRecord("", data.second.author, data.second.tags, data.second.team)));
         final destFile = await getImageFile(newHash);
         await destFile.writeAsBytes(jpg);
         log("Copied to ${destFile.path}");

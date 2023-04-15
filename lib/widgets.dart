@@ -181,87 +181,7 @@ class _ImageTileState extends State<ImageTile> {
               if (imageExists) {
                 Navigator.of(context).push(MaterialPageRoute(
                   builder: (context) {
-                    return Scaffold(
-                      appBar: AppBar(
-                        title: const Text("Back"),
-                      ),
-                      body: Padding(
-                        padding: const EdgeInsets.all(8.0),
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(
-                              flex: 3,
-                              child: Container(
-//                                color: Colors.red,
-                                child: Hero(
-                                  tag: heroTag,
-                                  child: Center(
-                                    child: FutureBuilder(
-                                      key: _imgKeyInner,
-                                      future: _imageFuture,
-                                      builder: (context, snapshot) {
-                                        if (snapshot.data != null) {
-                                          return ClipRRect(
-                                            borderRadius: BorderRadius.circular(12),
-                                            child: Image.file(
-                                              snapshot.data!,
-                                            )
-                                          );
-                                        } else {
-                                          return placeholder;
-                                        }
-                                      }
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                            const Divider(indent: 8, endIndent: 8,),
-                            Row(
-                              crossAxisAlignment: CrossAxisAlignment.baseline,
-                              textBaseline: TextBaseline.alphabetic,
-                              children: [
-                                Text("Author: ", style: theme.textTheme.titleMedium),
-                                Text(record.author),
-//                                const SizedBox(width: 30),
-                                const SizedBox(height: 30, child: VerticalDivider(indent: 8, thickness: 1, width: 16, color: Colors.grey,)),
-////                                const Spacer(flex: 2),
-                                Expanded(
-                                  flex: 7,
-                                  child: Row(
-                                    mainAxisAlignment: MainAxisAlignment.center,
-                                    children: [
-                                      Text(record.tags.isEmpty ? "No Tags" : "Tags:", style: theme.textTheme.titleMedium),
-                                      if (record.tags.isNotEmpty)
-                                        const SizedBox(width: 8),
-                                      if (record.tags.isNotEmpty)
-                                        Expanded(
-                                          child: SingleChildScrollView(
-                                            scrollDirection: Axis.horizontal,
-                                            child: Row(
-                                              children: [
-                                                for (String tag in record.tags)
-                                                  Card(child: Padding(
-                                                    padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
-                                                    child: Text(tag, style: theme.textTheme.bodyLarge?.copyWith(fontSize: 16)),
-                                                  )),
-                                              ]
-                                            ),
-                                          ),
-                                        )
-                                    ],
-                                  ),
-                                ),
-////                                const Spacer(),
-                              ],
-                            ),
-//                            Spacer(),
-                          ],
-                        ),
-                      ),
-                    );
+                    return ImageDetailsPage(heroTag: heroTag, imgKeyInner: _imgKeyInner, imageFuture: _imageFuture, placeholder: placeholder, theme: theme, record: record);
                   }
                 ));
               } else {
@@ -292,6 +212,110 @@ class _ImageTileState extends State<ImageTile> {
               ),
             )
         )
+    );
+  }
+}
+
+class ImageDetailsPage extends StatelessWidget {
+  const ImageDetailsPage({
+    super.key,
+    required this.heroTag,
+    required GlobalKey<State<FutureBuilder>> imgKeyInner,
+    required Future<File> imageFuture,
+    required this.placeholder,
+    required this.theme,
+    required this.record,
+  }) : _imgKeyInner = imgKeyInner, _imageFuture = imageFuture;
+
+  final String heroTag;
+  final GlobalKey<State<FutureBuilder>> _imgKeyInner;
+  final Future<File> _imageFuture;
+  final Icon placeholder;
+  final ThemeData theme;
+  final ImageRecord record;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Back"),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(8.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Flexible(
+              flex: 3,
+              child: Container(
+//                                color: Colors.red,
+                child: Hero(
+                  tag: heroTag,
+                  child: Center(
+                    child: FutureBuilder(
+                      key: _imgKeyInner,
+                      future: _imageFuture,
+                      builder: (context, snapshot) {
+                        if (snapshot.data != null) {
+                          return ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(
+                              snapshot.data!,
+                            )
+                          );
+                        } else {
+                          return placeholder;
+                        }
+                      }
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            const Divider(indent: 8, endIndent: 8,),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.baseline,
+              textBaseline: TextBaseline.alphabetic,
+              children: [
+                Text("Author: ", style: theme.textTheme.titleMedium),
+                Text(record.author),
+//                                const SizedBox(width: 30),
+                const SizedBox(height: 30, child: VerticalDivider(indent: 8, thickness: 1, width: 16, color: Colors.grey,)),
+////                                const Spacer(flex: 2),
+                Expanded(
+                  flex: 7,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(record.tags.isEmpty ? "No Tags" : "Tags:", style: theme.textTheme.titleMedium),
+                      if (record.tags.isNotEmpty)
+                        const SizedBox(width: 8),
+                      if (record.tags.isNotEmpty)
+                        Expanded(
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: Row(
+                              children: [
+                                for (String tag in record.tags)
+                                  Card(child: Padding(
+                                    padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+                                    child: Text(tag, style: theme.textTheme.bodyLarge?.copyWith(fontSize: 16)),
+                                  )),
+                              ]
+                            ),
+                          ),
+                        )
+                    ],
+                  ),
+                ),
+////                                const Spacer(),
+              ],
+            ),
+//                            Spacer(),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -485,46 +509,49 @@ class _TagSelectionState extends State<TagSelection> {
           ),
         ),
 //        const Spacer(),
-        IconButton(
-          icon: const Icon(Icons.add),
-          onPressed: () async {
-            String? tag = await showDialog(
-              context: context,
-              builder: (context) {
-                return AlertDialog(
-                  title: const Text("Add tag"),
-                  content: TextFormField(
-                    key: _tagKey,
-                    decoration: const InputDecoration(
-                      hintText: "Enter tag",
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8.0),
+          child: IconButton(
+            icon: const Icon(Icons.add),
+            onPressed: () async {
+              String? tag = await showDialog(
+                context: context,
+                builder: (context) {
+                  return AlertDialog(
+                    title: const Text("Add tag"),
+                    content: TextFormField(
+                      key: _tagKey,
+                      decoration: const InputDecoration(
+                        hintText: "Enter tag",
+                      ),
                     ),
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pop();
-                      },
-                      child: const Text("Cancel"),
-                    ),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.of(context).pop(_tagKey.currentState?.value);
-                      },
-                      child: const Text("Add"),
-                    ),
-                  ],
-                );
-              },
-            );
-            log("tag: $tag");
-            if (tag != null && tag != "") {
-              setState(() {
-                if (!tags.contains(tag)) {
-                  tags.add(tag);
-                }
-              });
-            }
-          },
+                    actions: [
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
+                        child: const Text("Cancel"),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop(_tagKey.currentState?.value);
+                        },
+                        child: const Text("Add"),
+                      ),
+                    ],
+                  );
+                },
+              );
+              log("tag: $tag");
+              if (tag != null && tag != "") {
+                setState(() {
+                  if (!tags.contains(tag)) {
+                    tags.add(tag);
+                  }
+                });
+              }
+            },
+          ),
         ),
       ],
     );
