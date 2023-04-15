@@ -1,5 +1,7 @@
+import 'dart:developer';
 import 'dart:math' as math;
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
 import 'package:adaptive_navigation/adaptive_navigation.dart';
@@ -8,6 +10,291 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
 import 'package:camera/camera.dart';
+import 'package:the_purple_alliance/util.dart';
+import 'package:file_picker/file_picker.dart';
+
+import 'data_manager.dart';
+
+class PhotosPage extends StatefulWidget {
+  final String heroTag;
+  final String label;
+  final int teamNumber;
+
+  const PhotosPage(this.heroTag, this.label, this.teamNumber, {super.key});
+
+  @override
+  State<PhotosPage> createState() => _PhotosPageState();
+}
+
+class _PhotosPageState extends State<PhotosPage> {
+  late CameraDescription _cameraDescription;
+  bool gridMode = true;
+  final Map<String, GlobalKey<State<ImageTile>>> _keys = {};
+
+  @override
+  void initState() {
+    super.initState();
+    availableCameras().then((cameras) {
+      final camera = cameras
+      //.where((camera) => camera.lensDirection == CameraLensDirection.back)
+          .toList()
+          .first;
+      setState(() {
+        _cameraDescription = camera;
+      });
+      print("Setup camera");
+    }).catchError((err) {
+      print(err);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    var appState = context.watch<MyAppState>();
+    return Scaffold(
+      appBar: AppBar(
+        backgroundColor: theme.primaryColorDark,
+        title: Hero(tag: widget.heroTag, child: Text(widget.label, style: theme.textTheme.headlineSmall)),
+        centerTitle: true,
+      ),
+      body: Center(
+        child: Consumer<ImageSyncManager>(
+          builder: (context, imageSyncManager, child) => GridView.builder(
+            itemCount: imageSyncManager.knownImages.length + 1,
+            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+              maxCrossAxisExtent: 100,
+              childAspectRatio: 1.0,
+            ),
+            itemBuilder: (context, index) {
+              String? hash = index == 0 ? null : appState.imageSyncManager.knownImages[index - 1].hash;
+              return index == 0 ? CameraTile(() async {
+                var navigator = Navigator.of(context);
+                final String? imagePath = await navigator.push(MaterialPageRoute(
+                  builder: (_) =>
+                  isCameraSupported()
+                      ? TakePhoto(camera: _cameraDescription)
+                      : const TakePhotoFake(),
+                ));
+                log("imagePath: $imagePath");
+                if (imagePath != null) {
+                  final ImageRecord? imageRecord = await navigator.push(MaterialPageRoute(
+                      builder: (_) => PhotoMeta(imagePath: imagePath,
+                          teamNumber: widget.teamNumber)
+                  ));
+                  log("Record: $imageRecord");
+                  if (imageRecord != null) {
+                    imageSyncManager.addTakenPicture(
+                        imageRecord.team, imageRecord.author, imageRecord.tags,
+                        imagePath);
+                  }
+                }
+              }) : ImageTile(index - 1,
+                  hash!,
+                  key: _keys.putIfAbsent(hash, () => GlobalKey<State<ImageTile>>(debugLabel: "imageTile$hash")));
+            },
+          ),
+        ),
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () {
+          setState(() {
+            gridMode = !gridMode;
+          });
+        },
+        child: Icon(gridMode ? Icons.grid_view : Icons.list),
+      )
+    );
+  }
+}
+
+class CameraTile extends StatelessWidget {
+  final Function() onTap;
+  const CameraTile(this.onTap, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Card(
+        child: InkWell(
+            onTap: onTap,
+            customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
+            child: const Icon(Icons.camera_alt_outlined, size: 48,)
+        )
+    );
+  }
+}
+
+class ImageTile extends StatefulWidget {
+  final int index;
+  final String hash;
+  const ImageTile(this.index, this.hash, {super.key});
+
+  @override
+  State<ImageTile> createState() => _ImageTileState();
+}
+
+class _ImageTileState extends State<ImageTile> {
+
+  late Future<File> _imageFuture;
+  final GlobalKey<State<FutureBuilder>> _imgKey = GlobalKey<State<FutureBuilder>>(debugLabel: "futureImage");
+  final GlobalKey<State<FutureBuilder>> _imgKeyInner = GlobalKey<State<FutureBuilder>>(debugLabel: "futureImageInner");
+
+  @override
+  void initState() {
+    super.initState();
+    _imageFuture = getImageFile(widget.hash, quick: true).then((f) async {
+      while (!(await f.exists())) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      return f;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    var appState = context.watch<MyAppState>();
+    var syncManager = appState.imageSyncManager;
+    ImageRecord record = syncManager.knownImages[widget.index];
+    String hash = record.hash;
+    bool imageExists = syncManager.downloadedHashes.contains(hash);
+    /*Future<File> imageFuture = syncManager.getImageFile(hash, quick: true).then((f) async {
+      while (!(await f.exists())) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      return f;
+    });*/
+    var placeholder = Icon(
+        Icons.photo_outlined,
+        size: 50,
+        color: (theme.iconTheme.color ?? Colors.black).withOpacity(
+            0.15));
+    var heroTag = "photo_${record.hash}";
+    return Card(
+        child: InkWell(
+            onTap: () {
+              log("tapped image ${widget.index}");
+              /*setState(() {
+                _showImg = !_showImg;
+              });*/
+              if (imageExists) {
+                Navigator.of(context).push(MaterialPageRoute(
+                  builder: (context) {
+                    return Scaffold(
+                      appBar: AppBar(
+                        title: const Text("Back"),
+                      ),
+                      body: Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(
+                              flex: 3,
+                              child: Container(
+//                                color: Colors.red,
+                                child: Hero(
+                                  tag: heroTag,
+                                  child: Center(
+                                    child: FutureBuilder(
+                                      key: _imgKeyInner,
+                                      future: _imageFuture,
+                                      builder: (context, snapshot) {
+                                        if (snapshot.data != null) {
+                                          return ClipRRect(
+                                            borderRadius: BorderRadius.circular(12),
+                                            child: Image.file(
+                                              snapshot.data!,
+                                            )
+                                          );
+                                        } else {
+                                          return placeholder;
+                                        }
+                                      }
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const Divider(indent: 8, endIndent: 8,),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.baseline,
+                              textBaseline: TextBaseline.alphabetic,
+                              children: [
+                                Text("Author: ", style: theme.textTheme.titleMedium),
+                                Text(record.author),
+//                                const SizedBox(width: 30),
+                                const SizedBox(height: 30, child: VerticalDivider(indent: 8, thickness: 1, width: 16, color: Colors.grey,)),
+////                                const Spacer(flex: 2),
+                                Expanded(
+                                  flex: 7,
+                                  child: Row(
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(record.tags.isEmpty ? "No Tags" : "Tags:", style: theme.textTheme.titleMedium),
+                                      if (record.tags.isNotEmpty)
+                                        const SizedBox(width: 8),
+                                      if (record.tags.isNotEmpty)
+                                        Expanded(
+                                          child: SingleChildScrollView(
+                                            scrollDirection: Axis.horizontal,
+                                            child: Row(
+                                              children: [
+                                                for (String tag in record.tags)
+                                                  Card(child: Padding(
+                                                    padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+                                                    child: Text(tag, style: theme.textTheme.bodyLarge?.copyWith(fontSize: 16)),
+                                                  )),
+                                              ]
+                                            ),
+                                          ),
+                                        )
+                                    ],
+                                  ),
+                                ),
+////                                const Spacer(),
+                              ],
+                            ),
+//                            Spacer(),
+                          ],
+                        ),
+                      ),
+                    );
+                  }
+                ));
+              } else {
+                syncManager.addToDownloadManual(record);
+              }
+            },
+            customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(Radius.circular(12))),
+            //match shape of card
+            child: Container(
+              padding: const EdgeInsets.all(4.0),
+              child: Hero(
+                tag: heroTag,
+                child: Center(
+                  child: (imageExists
+                    ? FutureBuilder(key: _imgKey, future: _imageFuture, builder: (context, snapshot) {
+                      if (snapshot.data != null) {
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(snapshot.data!)
+                        );
+                      } else {
+                        return placeholder;
+                      }
+                })// Image.network('https://picsum.photos/250?image=${widget.index}')
+                    : placeholder),
+                ),
+              ),
+            )
+        )
+    );
+  }
+}
 
 class CardPicture extends StatelessWidget {
   CardPicture({this.onTap, this.imagePath});
@@ -84,10 +371,201 @@ class CardPicture extends StatelessWidget {
   }
 }
 
+class PhotoMeta extends StatelessWidget {
+  final String imagePath;
+  final int teamNumber;
+  PhotoMeta({super.key, required this.imagePath, required this.teamNumber});
+  final GlobalKey<_TagSelectionState> tagSelectionKey = GlobalKey<_TagSelectionState>(debugLabel: "tagSelectionKey");
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    var appState = context.watch<MyAppState>();
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text("Image metadata"),
+      ),
+      body: Container(
+        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 20),
+        child: SingleChildScrollView(
+          child: Center(
+            child: Column(
+              children: [
+                Text("Team $teamNumber", style: theme.textTheme.headlineMedium),
+                Image.file(
+                  File(imagePath),
+                  frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+                    return Card(
+                      elevation: 8,
+                      child: Padding(
+                        padding: const EdgeInsets.all(0.0),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: child,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                const Divider(indent: 5, endIndent: 5, height: 20),
+                TagSelection(key: tagSelectionKey),
+                const Divider(indent: 5, endIndent: 5, height: 20),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.add_a_photo, color: Colors.black),
+                      label: const Text("Post", style: TextStyle(color: Colors.black)),
+                      onPressed: () {
+                        print("making record: $tagSelectionKey; ${tagSelectionKey.currentState}; ${tagSelectionKey.currentState?.tags}");
+                        ImageRecord record = ImageRecord("", appState.username, tagSelectionKey.currentState?.tags ?? [], teamNumber);
+                        Navigator.of(context).pop(record);
+                      },
+                      style: ButtonStyle(backgroundColor: MaterialStateProperty.all(Colors.green))
+                    ),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.cancel, color: Colors.black),
+                      label: const Text("Cancel", style: TextStyle(color: Colors.black)),
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      style: ButtonStyle(backgroundColor: MaterialStateProperty.all(Colors.red))
+                    ),
+                  ]
+                )
+              ]
+            ),
+          ),
+        ),
+      )
+    );
+  }
+}
+
+class TagSelection extends StatefulWidget {
+  const TagSelection({
+    super.key,
+  });
+
+  @override
+  State<TagSelection> createState() => _TagSelectionState();
+}
+
+class _TagSelectionState extends State<TagSelection> {
+  List<String> tags = [];
+  final GlobalKey<FormFieldState<String>> _tagKey = GlobalKey<FormFieldState<String>>(debugLabel: "tag");
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Row(
+      children: [
+        Text("Tags", style: theme.textTheme.labelLarge?.copyWith(fontSize: 16)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (String tag in tags)
+                  Card(child: InkWell(
+                    onTap: () {
+                      setState(() {
+                        tags.remove(tag);
+                      });
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+                      child: Text(tag, style: theme.textTheme.bodyLarge?.copyWith(fontSize: 16)),
+                    ),
+                  )),
+            ]
+            ),
+          ),
+        ),
+//        const Spacer(),
+        IconButton(
+          icon: const Icon(Icons.add),
+          onPressed: () async {
+            String? tag = await showDialog(
+              context: context,
+              builder: (context) {
+                return AlertDialog(
+                  title: const Text("Add tag"),
+                  content: TextFormField(
+                    key: _tagKey,
+                    decoration: const InputDecoration(
+                      hintText: "Enter tag",
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                      },
+                      child: const Text("Cancel"),
+                    ),
+                    TextButton(
+                      onPressed: () {
+                        Navigator.of(context).pop(_tagKey.currentState?.value);
+                      },
+                      child: const Text("Add"),
+                    ),
+                  ],
+                );
+              },
+            );
+            log("tag: $tag");
+            if (tag != null && tag != "") {
+              setState(() {
+                if (!tags.contains(tag)) {
+                  tags.add(tag);
+                }
+              });
+            }
+          },
+        ),
+      ],
+    );
+  }
+}
+
+class TakePhotoFake extends StatelessWidget {
+  const TakePhotoFake({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Select picture'),
+      ),
+      body: Center(
+        child: ElevatedButton(
+          onPressed: () async {
+            print("pick");
+            var navigator = Navigator.of(context);
+            FilePickerResult? result = await FilePicker.platform.pickFiles(
+              dialogTitle: "Image file",
+              type: FileType.image,
+              lockParentWindow: true,
+            );
+            print('result: ${result?.files.single}');
+            if (result?.files.single.path != null) {
+              navigator.pop(result?.files.single.path);
+            }
+          },
+          child: const Text("Pick"),
+        ),
+      ),
+    );
+  }
+}
+
 class TakePhoto extends StatefulWidget {
   final CameraDescription? camera;
 
-  TakePhoto({super.key, this.camera});
+  const TakePhoto({super.key, this.camera});
 
   @override
   State<TakePhoto> createState() => _TakePhotoState();
@@ -121,6 +599,13 @@ class _TakePhotoState extends State<TakePhoto> {
       print(e);
       return null;
     }
+  }
+
+
+  @override
+  void dispose() async {
+    super.dispose();
+    await _controller.dispose();
   }
 
   @override

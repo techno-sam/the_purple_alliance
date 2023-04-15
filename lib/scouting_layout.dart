@@ -35,7 +35,7 @@ class TextWidgetBuilder extends JsonWidgetBuilder {
       _style = schemeData["style"];
     }
   }
-  
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -121,7 +121,7 @@ class TextFieldWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<TextDat
   TextFieldWidgetBuilder.fromJson(super.schemeData) : super.fromJson() {
     _controller = TextEditingController(text: _dataValue?.value ?? TextDataValue.getDefault());
   }
-  
+
   @override
   Widget build(BuildContext context) {
     _controller.text = _dataValue?.value ?? TextDataValue.getDefault();
@@ -297,11 +297,81 @@ class CommentsWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<Comments
   }
 }
 
+class PhotosBuilder extends JsonWidgetBuilder {
+  late final String _label;
+  double? _padding;
+
+  PhotosBuilder.fromJson(Map<String, dynamic> schemeData) : super.fromJson(schemeData) {
+    _label = schemeData["label"];
+    if (schemeData.containsKey("padding")) {
+      var padding = schemeData["padding"];
+      if (padding is double) {
+        _padding = padding;
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    var appState = context.watch<MyAppState>();
+    var heroTag = "photos_$_label";
+    return Padding(
+      padding: EdgeInsets.all(_padding ?? 8.0),
+      child: Card(
+          color: theme.colorScheme.primaryContainer,
+          child: Container(
+              margin: const EdgeInsets.all(4.0),
+              padding: const EdgeInsets.all(4.0),
+              child: Column(
+                children: [
+                  Hero(tag: heroTag, child: Text(_label, style: theme.textTheme.headlineSmall)),
+                  const Divider(),
+                  ElevatedButton.icon(
+                    onPressed: () {
+                      appState.imageSyncManager.addToDownload(appState.imageSyncManager.notDownloaded);
+                      Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                              builder: ((context) {
+                                return PhotosPage(heroTag, _label, appState.builder?.currentTeam ?? 0);
+                              })
+                          )
+                      );
+                    },
+                    icon: const Icon(Icons.photo_library),
+                    label: const Text("View Photos"),
+                  ),
+                  /*const Divider(),
+                  Text("Your comment", style: theme.textTheme.labelMedium),
+                  TextFormField(
+                    key: Key(_key),
+                    decoration: const InputDecoration(
+                      border: OutlineInputBorder(),
+                    ),
+                    minLines: 1,
+                    maxLines: 5,
+                    keyboardType: TextInputType.multiline,
+                    controller: _controller,
+//                    initialValue: _dataValue?.personalComment ?? CommentsDataValue.getDefault(),
+                    onChanged: (value) {
+                      _dataValue?.personalComment = value;
+                    },
+                  )*/
+                ],
+              )
+          )
+      ),
+    );
+  }
+}
+
 Map<String, JsonWidgetBuilder Function(Map<String, dynamic>)> widgetBuilders = {};
 
 void initializeBuilders() {
   widgetBuilders.clear();
   widgetBuilders["text"] = TextWidgetBuilder.fromJson;
+  widgetBuilders["photos"] = PhotosBuilder.fromJson;
   widgetBuilders["text_field"] = TextFieldWidgetBuilder.fromJson;
   widgetBuilders["dropdown"] = DropdownWidgetBuilder.fromJson;
   widgetBuilders["star_rating"] = StarRatingWidgetBuilder.fromJson;

@@ -50,6 +50,7 @@ dependencies:
   image: ^4.0.15
   crypto: ^3.0.2
   http_parser: ^4.0.2
+  file_picker: ^5.2.9
 
 dev_dependencies:
   flutter_test:

@@ -17,11 +17,18 @@ String sha256Hash(Uint8List data) {
   return digest;
 }
 
+String sha256HashString(String data) {
+  return sha256Hash(const Utf8Encoder().convert(data));
+}
+
 class DevHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => port != 443;
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) {
+      //log('bad certificate callback for $host:$port');
+      return port != 443;
+    };
   }
 }
 
@@ -37,19 +44,28 @@ class Connection {
   late final http.BaseClient client;
 
   Connection(this.url, String username, String password) {
+    _setupDevOverrides();
     client = http_auth.DigestAuthClient(username, password);
+  }
+}
+
+void _setupDevOverrides() {
+  if (kDebugMode || true) {
+    //log("Enabling debug http overrides in unauthorized connection test");
+    HttpOverrides.global = DevHttpOverrides();
   }
 }
 
 /// Checks for a connection, without needing correct credentials
 Future<bool> testUnauthorizedConnection(String url) async {
   http.Response response;
+  _setupDevOverrides();
   try {
     response = await http.get(_getUri(url, 'check_online')).timeout(const Duration(seconds: 10));
   } on TimeoutException {
     return false;
   } catch (e) {
-    log('Connection error: $e');
+    print('Connection error: $e');
     return false;
   }
   if (response.statusCode == 200) {
@@ -61,6 +77,7 @@ Future<bool> testUnauthorizedConnection(String url) async {
 
 Future<bool> testAuthorizedConnection(Connection connection) async {
   http.Response response;
+  _setupDevOverrides();
   try {
     response = await connection.client.get(_getUri(connection.url, 'check_auth')).timeout(const Duration(seconds: 10));
   } on TimeoutException {
@@ -78,6 +95,7 @@ Future<bool> testAuthorizedConnection(Connection connection) async {
 
 Future<List<dynamic>> getScheme(Connection connection) async {
   http.Response response;
+  _setupDevOverrides();
   try {
     response = await connection.client.get(_getUri(connection.url, 'scheme.json'));
   } catch (e) {
@@ -96,6 +114,7 @@ Future<List<dynamic>> getScheme(Connection connection) async {
 
 Future<Map<String, dynamic>> getServerMeta(Connection connection) async {
   http.Response response;
+  _setupDevOverrides();
   try {
     response = await connection.client.get(_getUri(connection.url, 'meta.json'));
   } catch (e) {
@@ -114,6 +133,7 @@ Future<Map<String, dynamic>> getServerMeta(Connection connection) async {
 
 Future<Map<String, dynamic>> getTeamData(Connection connection) async {
   http.Response response;
+  _setupDevOverrides();
   try {
     response = await connection.client.get(_getUri(connection.url, 'data.json'));
   } catch (e) {
@@ -134,6 +154,7 @@ Future<Map<String, dynamic>> getTeamData(Connection connection) async {
 
 Future<Uint8List?> getImage(Connection connection, String hash) async {
   http.Response response;
+  _setupDevOverrides();
   try {
     response = await connection.client.get(_getUri(connection.url, 'image/$hash'));
   } catch (e) {
@@ -148,8 +169,26 @@ Future<Uint8List?> getImage(Connection connection, String hash) async {
   }
 }
 
+Future<List<String>?> getExistingHashes(Connection connection) async {
+  http.Response response;
+  _setupDevOverrides();
+  try {
+    response = await connection.client.get(_getUri(connection.url, 'image_hashes.txt'));
+  } catch (e) {
+    log('Image hashes download failed: $e');
+    return null;
+  }
+  if (response.statusCode == 200) {
+    return response.body.split("\n").where((element) => element != '').toList();
+  } else {
+    log('Invalid status code for hash download: ${response.statusCode}');
+    return null;
+  }
+}
+
 Future<ImageRecord?> getImageMeta(Connection connection, String hash) async {
   http.Response response;
+  _setupDevOverrides();
   try {
     response = await connection.client.get(_getUri(connection.url, 'image_meta/$hash'));
   } catch (e) {
@@ -160,9 +199,9 @@ Future<ImageRecord?> getImageMeta(Connection connection, String hash) async {
     var decoded = await compute(jsonDecode, response.body);
     if (decoded is Map<String, dynamic>) {
       String author = typeOr(decoded["author"], "Unknown");
-      String description = typeOr(decoded["descripion"], "Unknown");
-      int team = int.parse(decoded["team"]); // the team is essential, if we don't get it, there is nothing to be shown
-      return ImageRecord(hash, author, description, team);
+      List<String> tags = typeOr(decoded["tags"], <dynamic>[]).whereType<String>().toList();
+      int team = decoded["team"]; // the team is essential, if we don't get it, there is nothing to be shown
+      return ImageRecord(hash, author, tags, team);
     } else {
       log('Invalid meta info for image $decoded');
       return null;
@@ -175,14 +214,15 @@ Future<ImageRecord?> getImageMeta(Connection connection, String hash) async {
 
 Future<void> uploadImage(Connection connection, ImageRecord record, Uint8List data)  async {
   http.StreamedResponse response;
+  _setupDevOverrides();
   try {
-    response = await connection.client.send(
-        http.MultipartRequest('POST', _getUri(connection.url, 'img_upload'))
-          ..fields['description'] = record.description
+    response = await (
+        http.MultipartRequest('POST', _getUri(connection.url, 'image_upload'))
+          ..fields['tags'] = jsonEncode(record.tags)
           ..fields['hash'] = record.hash
           ..fields['team'] = '${record.team}'
-          ..files.add(http.MultipartFile.fromBytes('image', data, contentType: http_parser.MediaType("image", "jpg")))
-    );
+          ..files.add(http.MultipartFile.fromBytes('image', data, contentType: http_parser.MediaType("image", "jpg"), filename: 'upload.jpg'))
+    ).send();
   } catch (e) {
     rethrow;
   }
@@ -195,6 +235,7 @@ Future<void> uploadImage(Connection connection, ImageRecord record, Uint8List da
 
 Future<void> sendDeltas(Connection connection, Map<String, dynamic> data) async {
   http.Response response;
+  _setupDevOverrides();
   try {
     response = await connection.client.post(_getUri(connection.url, 'update'), body: jsonEncode(data));
   } catch (e) {

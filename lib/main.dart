@@ -24,7 +24,7 @@ import 'package:the_purple_alliance/util.dart';
 
 void main() {
   initializeBuilders();
-  if (kDebugMode) {
+  if (kDebugMode || true) {
     log("Enabling debug http overrides");
     HttpOverrides.global = network.DevHttpOverrides();
   }
@@ -42,16 +42,19 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
         create: (context) => MyAppState(_scaffoldKey, _homepageKey),
-        child: MaterialApp(
-          scaffoldMessengerKey: _scaffoldKey,
-          title: 'The Purple Alliance',
-          theme: ThemeData(
-            useMaterial3: true,
-            colorScheme: ColorScheme.fromSeed(
-              seedColor: Colors.purple,
+        child: ChangeNotifierProvider(
+          create: (context) => Provider.of<MyAppState>(context, listen: false).imageSyncManager,
+          child: MaterialApp(
+            scaffoldMessengerKey: _scaffoldKey,
+            title: 'The Purple Alliance',
+            theme: ThemeData(
+              useMaterial3: true,
+              colorScheme: ColorScheme.fromSeed(
+                seedColor: Colors.purple,
+              ),
             ),
+            home: MyHomePage(key: _homepageKey),
           ),
-          home: MyHomePage(key: _homepageKey),
         )
     );
   }
@@ -75,9 +78,11 @@ class MyAppState extends ChangeNotifier {
   set _unsavedChanges(bool value) {
     if (__unsavedChanges != value) {
       __unsavedChanges = value;
-      _unsavedChangesBarState?.target?.setState(() {
-        _unsavedChangesBarState?.target?.unsavedChanges = value;
-      });
+      if ((_unsavedChangesBarState?.target?.unsavedChanges ?? value) != value) {
+        _unsavedChangesBarState?.target?.setState(() {
+          _unsavedChangesBarState?.target?.unsavedChanges = value;
+        });
+      }
     }
   }
   var current = WordPair.random();
@@ -100,7 +105,7 @@ class MyAppState extends ChangeNotifier {
     notifyListeners();
   }
   
-  final ImageSyncManager imageSyncManager = ImageSyncManager();
+  late final ImageSyncManager imageSyncManager = ImageSyncManager(() => httpClient, () => imageSyncMode, () => builder?.currentTeam);
 
   Future<String> get _localPath async {
     final directory = await getApplicationDocumentsDirectory();
@@ -381,7 +386,7 @@ class MyAppState extends ChangeNotifier {
   }
 
   Future<File?> _setPreviousData(Map<String, dynamic>? data) async {
-    return await writeJsonFile(_dataFile, data ?? {});
+    return await compute2(writeJsonFile, await _dataFile, data ?? {});
   }
 
   Future<List<dynamic>?> get _cachedScheme async {
@@ -618,6 +623,8 @@ class MyAppState extends ChangeNotifier {
       });
     } else {
       log("At different competition, clearing previous data...");
+      imageSyncManager.clear(() => httpClient);
+      await imageSyncManager.save();
     }
     if (checkedCompetition) {
       await _setCachedServerMeta(remoteServerMeta);
@@ -632,7 +639,7 @@ class MyAppState extends ChangeNotifier {
   Future<void> unlock() async {
     _teamNumberInProgress = _teamNumber ?? 1234;
     _serverUrlInProgress = _serverUrl ?? "example.com";
-    Future<File?> future = _setPreviousData(builder?.teamManager.save());
+    Future<File?> future = _setPreviousData(builder?.teamManager.save()).then((_) async => await imageSyncManager.save());
     builder = null;
     await future.then((_) {
       locked = false;
@@ -692,6 +699,37 @@ class MyAppState extends ChangeNotifier {
     /*******************/
     /* Begin Protected */
     /*******************/
+    try {
+      await imageSyncManager.runMetaDownload(httpClient);
+    } catch (e) {
+      log("Error while synchronizing image meta: $e");
+      scaffoldKey.currentState?.showSnackBar(SnackBar(
+          content: const Text("Error while synchronizing image meta"),
+          action: SnackBarAction(
+            label: "Info",
+            onPressed: () {
+              if (homepageContext == null) return;
+              showDialog(
+                context: homepageContext!,
+                builder: (context) {
+                  return AlertDialog(
+                    title: const Text("Error while synchronizing image meta"),
+                    content: Text('$e'),
+                    actions: [
+                      TextButton(
+                        child: const Text("OK"),
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                        },
+                      ),
+                    ],
+                  );
+                },
+              );
+            },
+          )
+      ));
+    }
     try { //1234567890
       Map<String, dynamic> toServer = builder!.teamManager.saveNetworkDeltas();
 //      await network.sendDeltas(httpClient, toServer);
@@ -750,6 +788,7 @@ class MyAppState extends ChangeNotifier {
       _noSync = true;
       _currentlySaving = true;
       await _setPreviousData(builder!.teamManager.save());
+      await imageSyncManager.save();
       if (kDebugMode) {
         log("Saved...");
       }
@@ -1576,7 +1615,6 @@ class SettingsPage extends StatelessWidget {
                                   controller: TextEditingController(text: appState.getDisplayUrl()),
                                   keyboardType: TextInputType.url,
                                   readOnly: appState.locked,
-//                                  initialValue: appState.getDisplayUrl(),
                                   onChanged: (value) {
                                     appState._serverUrlInProgress = value;
                                   },
@@ -1738,6 +1776,58 @@ class SettingsPage extends StatelessWidget {
                           style: TextStyle(
                             color: Colors.black,
                           )
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 20),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.deepOrange,
+                  ),
+                  onPressed: () async {
+                    showDialog(
+                      context: context,
+                      builder: (context) {
+                        return AlertDialog(
+                          title: const Text("Clear all local images?"),
+                          content: const Text("This will clear all local images."),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.of(context).pop();
+                              },
+                              child: const Text("Cancel"),
+                            ),
+                            TextButton(
+                              onPressed: () async {
+                                Navigator.of(context).pop();
+                                appState.imageSyncManager.downloadedHashes.clear();
+                                appState.imageSyncManager.knownImages.clear();
+                              },
+                              child: const Text("Confirm"),
+                            ),
+                          ],
+                        );
+                      },
+                    );
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                    child: Row(
+                      children: const [
+                        Icon(
+                          Icons.warning,
+                          color: Colors.black,
+                        ),
+                        SizedBox(width: 10),
+                        Text(
+                            "Clear images\n(Keeps files)",
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: Colors.black,
+                            )
                         ),
                       ],
                     ),
