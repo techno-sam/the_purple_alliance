@@ -1803,7 +1803,7 @@ class SettingsPage extends StatelessWidget {
                             TextButton(
                               onPressed: () async {
                                 Navigator.of(context).pop();
-                                appState.imageSyncManager.downloadedHashes.clear();
+                                appState.imageSyncManager.downloadedUUIDs.clear();
                                 appState.imageSyncManager.knownImages.clear();
                               },
                               child: const Text("Confirm"),

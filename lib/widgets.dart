@@ -159,7 +159,7 @@ class _ImageTileState extends State<ImageTile> {
     var syncManager = appState.imageSyncManager;
     ImageRecord record = syncManager.knownImages[widget.index];
     String hash = record.uuid;
-    bool imageExists = syncManager.downloadedHashes.contains(hash);
+    bool imageExists = syncManager.downloadedUUIDs.contains(hash);
     /*Future<File> imageFuture = syncManager.getImageFile(hash, quick: true).then((f) async {
       while (!(await f.exists())) {
         await Future.delayed(const Duration(milliseconds: 100));
@@ -179,7 +179,7 @@ class _ImageTileState extends State<ImageTile> {
               /*setState(() {
                 _showImg = !_showImg;
               });*/
-              if (imageExists) {
+              if (syncManager.downloadedUUIDs.contains(hash)) {
                 Navigator.of(context).push(MaterialPageRoute(
                   builder: (context) {
                     return ImageDetailsPage(heroTag: heroTag, imgKeyInner: _imgKeyInner, imageFuture: _imageFuture, placeholder: placeholder, theme: theme, record: record);

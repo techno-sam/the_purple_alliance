@@ -41,11 +41,11 @@ Uri _getUri(String url, String path) {
 
 class Connection {
   final String url;
-  late final http.BaseClient client;
+  late final http_auth.DigestAuthClient client;
 
   Connection(this.url, String username, String password) {
     _setupDevOverrides();
-    client = CustomDigestAuthClient(username, password);
+    client = http_auth.DigestAuthClient(username, password);
   }
 }
 
@@ -216,12 +216,15 @@ Future<void> uploadImage(Connection connection, ImageRecord record, Uint8List da
   http.StreamedResponse response;
   _setupDevOverrides();
   try {
+    http.MultipartFile makeFile() => http.MultipartFile.fromBytes('image', data, contentType: http_parser.MediaType("image", "jpg"), filename: 'upload.jpg');
     var request = http.MultipartRequest('POST', _getUri(connection.url, 'image_upload'))
           ..fields['tags'] = jsonEncode(record.tags)
           ..fields['uuid'] = record.uuid
           ..fields['team'] = '${record.team}'
-          ..files.add(http.MultipartFile.fromBytes('image', data, contentType: http_parser.MediaType("image", "jpg"), filename: 'upload.jpg'));
+          ..files.add(makeFile());
+    connection.client.registerMultipartFileRestorer(makeFile, clearFirst: true);
     response = await connection.client.send(request);
+    connection.client.clearMultipartFileRestorers();
   } catch (e) {
     rethrow;
   }

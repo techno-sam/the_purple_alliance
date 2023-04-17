@@ -291,10 +291,9 @@ packages:
   http_auth:
     dependency: "direct main"
     description:
-      name: http_auth
-      sha256: b5abf5a63e43a3352cb88de85c8260e2bf15a71a7270f05b40a7cc0b695bbb1b
-      url: "https://pub.dev"
-    source: hosted
+      path: "../http_auth"
+      relative: true
+    source: path
     version: "1.0.1"
   http_parser:
     dependency: "direct main"

@@ -483,8 +483,14 @@ Future<String> getImagePath(String uuid, {bool quick = false}) async {
   return '$imagePath/$uuid.jpg';
 }
 
+Set<String> _nonExistentUUIDs = {};
+
 Future<File> getImageFile(String uuid, {bool quick = false}) async {
-  return File(await getImagePath(uuid, quick: quick));
+  final file = File(await getImagePath(uuid, quick: quick));
+  if (!await file.exists()) {
+    _nonExistentUUIDs.add(uuid);
+  }
+  return file;
 }
 
 
@@ -494,15 +500,15 @@ class ImageSyncManager extends ChangeNotifier {
   final Map<String, ImageRecord> _copied = {}; // already copied images, don't write to disk (cache images may no longer exist)
   final List<Pair<String, ImageRecord>> _toUpload = []; // images to be uploaded, key is a path to the image if it is in temp storage (write to disk)
   final List<String> _toDownload = []; // just a list of hashes, metadata is not yet present (don't write to disk, dynamically determined)
-  Set<String> _downloadedHashes = {}; // write to disk, this is what we already have
+  Set<String> _downloadedUUIDs = {}; // write to disk, this is what we already have
   final List<ImageRecord> _knownImages = []; // write to disk, this is a cached version of already synced stuff
   late Connection Function() _getConnection;
   late ImageSyncMode Function() _getMode;
   late int? Function() _getSelectedTeam;
   late bool Function() _isReady;
-  Set<String> get downloadedHashes => _downloadedHashes;
+  Set<String> get downloadedUUIDs => _downloadedUUIDs;
   List<ImageRecord> get knownImages => _knownImages;
-  Iterable<ImageRecord> get notDownloaded => _knownImages.where((element) => !_downloadedHashes.contains(element.uuid));
+  Iterable<ImageRecord> get notDownloaded => _knownImages.where((element) => !_downloadedUUIDs.contains(element.uuid));
   List<String> _serverKnownUuids = [];
 
   bool isKnown(String uuid) => _serverKnownUuids.contains(uuid);
@@ -537,6 +543,11 @@ class ImageSyncManager extends ChangeNotifier {
         return;
       }
       _alreadyTransferring = true;
+      while (_nonExistentUUIDs.isNotEmpty) {
+        String nonExistentUUID = _nonExistentUUIDs.elementAt(0);
+        _nonExistentUUIDs.remove(nonExistentUUID);
+        _downloadedUUIDs.remove(nonExistentUUID);
+      }
       await runCopy();
       final connection = _getConnection();
       await runDownload(connection);
@@ -555,7 +566,7 @@ class ImageSyncManager extends ChangeNotifier {
     _copied.clear();
     _toUpload.clear();
     _toDownload.clear();
-    _downloadedHashes.clear();
+    _downloadedUUIDs.clear();
     _knownImages.clear();
     _serverKnownUuids.clear();
   }
@@ -621,7 +632,7 @@ class ImageSyncManager extends ChangeNotifier {
     List<ImageRecord> newImages = data.first;
     List<String> removedUuids = data.second;
     for (String toRemove in removedUuids) {
-      _downloadedHashes.remove(toRemove);
+      _downloadedUUIDs.remove(toRemove);
       _knownImages.removeWhere((element) => element.uuid == toRemove);
     }
     _serverKnownUuids = data.third;
@@ -646,7 +657,7 @@ class ImageSyncManager extends ChangeNotifier {
       if (imageData != null) {
         var file = await getImageFile(downloadHash);
         await file.writeAsBytes(imageData, flush: true);
-        _downloadedHashes.add(downloadHash);
+        _downloadedUUIDs.add(downloadHash);
 //        _knownImages.add(record);
         notifyListeners();
       }
@@ -671,7 +682,7 @@ class ImageSyncManager extends ChangeNotifier {
 //        final ImageRecord record = ImageRecord(newHash, data.second.author, data.second.tags, data.second.team);
         _copied[data.first] = data.second;
 //        _loadedImages.add(data.second);
-        _downloadedHashes.add(data.second.uuid);
+        _downloadedUUIDs.add(data.second.uuid);
         _knownImages.add(data.second);
         notifyListeners();
       }
@@ -739,7 +750,7 @@ class ImageSyncManager extends ChangeNotifier {
 
       var downloadedHashes = decoded['downloaded_hashes'];
       if (downloadedHashes is List) {
-        _downloadedHashes = downloadedHashes.whereType<String>().toSet();
+        _downloadedUUIDs = downloadedHashes.whereType<String>().toSet();
       }
 
       var uploadData = decoded['to_upload'];
@@ -753,7 +764,7 @@ class ImageSyncManager extends ChangeNotifier {
         }
       }
       var toDownload = _knownImages.map((element) => element.uuid).toList();
-      for (String hash in _downloadedHashes) {
+      for (String hash in _downloadedUUIDs) {
         toDownload.remove(hash);
       }
       _toDownload.addAll(toDownload);
@@ -775,7 +786,7 @@ class ImageSyncManager extends ChangeNotifier {
     String data = await compute(jsonEncode, {
       'image_meta': imageMeta,
       'to_upload': uploadData,
-      'downloaded_hashes': _downloadedHashes.toList(),
+      'downloaded_hashes': _downloadedUUIDs.toList(),
     });
     final file = await _dataFile;
     return await compute(file.writeAsString, data);

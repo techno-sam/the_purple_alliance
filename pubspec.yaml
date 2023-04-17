@@ -53,6 +53,10 @@ dependencies:
   file_picker: ^5.2.9
   uuid: ^3.0.7
 
+dependency_overrides:
+  http_auth: # TODO switch to using git
+    path: ../http_auth/
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
