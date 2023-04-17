@@ -31,6 +31,21 @@ class Pair<A, B> {
   }
 }
 
+class Triple<A, B, C> {
+  late final A _first;
+  A get first => _first;
+  late final B _second;
+  B get second => _second;
+  late final C _third;
+  C get third => _third;
+
+  Triple.of(A first, B second, C third) {
+    _first = first;
+    _second = second;
+    _third = third;
+  }
+}
+
 T typeOr<T>(dynamic val, T default_) {
   return (val is T) ? val : default_;
 }

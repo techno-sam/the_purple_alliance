@@ -12,6 +12,7 @@ import 'package:the_purple_alliance/main.dart';
 import 'package:camera/camera.dart';
 import 'package:the_purple_alliance/util.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:uuid/uuid.dart';
 
 import 'data_manager.dart';
 
@@ -67,7 +68,7 @@ class _PhotosPageState extends State<PhotosPage> {
               childAspectRatio: 1.0,
             ),
             itemBuilder: (context, index) {
-              String? hash = index == 0 ? null : appState.imageSyncManager.knownImages[index - 1].hash;
+              String? hash = index == 0 ? null : appState.imageSyncManager.knownImages[index - 1].uuid;
               return index == 0 ? CameraTile(() async {
                 var navigator = Navigator.of(context);
                 final String? imagePath = await navigator.push(MaterialPageRoute(
@@ -157,7 +158,7 @@ class _ImageTileState extends State<ImageTile> {
     var appState = context.watch<MyAppState>();
     var syncManager = appState.imageSyncManager;
     ImageRecord record = syncManager.knownImages[widget.index];
-    String hash = record.hash;
+    String hash = record.uuid;
     bool imageExists = syncManager.downloadedHashes.contains(hash);
     /*Future<File> imageFuture = syncManager.getImageFile(hash, quick: true).then((f) async {
       while (!(await f.exists())) {
@@ -170,7 +171,7 @@ class _ImageTileState extends State<ImageTile> {
         size: 50,
         color: (theme.iconTheme.color ?? Colors.black).withOpacity(
             0.15));
-    var heroTag = "photo_${record.hash}";
+    var heroTag = "photo_${record.uuid}";
     return Card(
         child: InkWell(
             onTap: () {
@@ -236,6 +237,7 @@ class ImageDetailsPage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    ImageSyncManager syncManager = context.watch<ImageSyncManager>();
     return Scaffold(
       appBar: AppBar(
         title: const Text("Back"),
@@ -316,6 +318,12 @@ class ImageDetailsPage extends StatelessWidget {
           ],
         ),
       ),
+      floatingActionButton: syncManager.isKnown(record.uuid) ? null : FloatingActionButton(
+        child: const Icon(Icons.upload),
+        onPressed: () async {
+          await syncManager.remindUpload(record.uuid);
+        },
+      )
     );
   }
 }

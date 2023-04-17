@@ -105,7 +105,7 @@ class MyAppState extends ChangeNotifier {
     notifyListeners();
   }
   
-  late final ImageSyncManager imageSyncManager = ImageSyncManager(() => httpClient, () => imageSyncMode, () => builder?.currentTeam);
+  late final ImageSyncManager imageSyncManager = ImageSyncManager(() => httpClient, () => imageSyncMode, () => builder?.currentTeam, () => locked);
 
   Future<String> get _localPath async {
     final directory = await getApplicationDocumentsDirectory();

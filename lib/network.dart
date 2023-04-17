@@ -45,7 +45,7 @@ class Connection {
 
   Connection(this.url, String username, String password) {
     _setupDevOverrides();
-    client = http_auth.DigestAuthClient(username, password);
+    client = CustomDigestAuthClient(username, password);
   }
 }
 
@@ -169,7 +169,7 @@ Future<Uint8List?> getImage(Connection connection, String hash) async {
   }
 }
 
-Future<List<String>?> getExistingHashes(Connection connection) async {
+Future<List<String>?> getExistingUuids(Connection connection) async {
   http.Response response;
   _setupDevOverrides();
   try {
@@ -186,11 +186,11 @@ Future<List<String>?> getExistingHashes(Connection connection) async {
   }
 }
 
-Future<ImageRecord?> getImageMeta(Connection connection, String hash) async {
+Future<ImageRecord?> getImageMeta(Connection connection, String uuid) async {
   http.Response response;
   _setupDevOverrides();
   try {
-    response = await connection.client.get(_getUri(connection.url, 'image_meta/$hash'));
+    response = await connection.client.get(_getUri(connection.url, 'image_meta/$uuid'));
   } catch (e) {
     log('Image meta download error: $e');
     return null;
@@ -201,7 +201,7 @@ Future<ImageRecord?> getImageMeta(Connection connection, String hash) async {
       String author = typeOr(decoded["author"], "Unknown");
       List<String> tags = typeOr(decoded["tags"], <dynamic>[]).whereType<String>().toList();
       int team = decoded["team"]; // the team is essential, if we don't get it, there is nothing to be shown
-      return ImageRecord(hash, author, tags, team);
+      return ImageRecord(uuid, author, tags, team);
     } else {
       log('Invalid meta info for image $decoded');
       return null;
@@ -216,13 +216,12 @@ Future<void> uploadImage(Connection connection, ImageRecord record, Uint8List da
   http.StreamedResponse response;
   _setupDevOverrides();
   try {
-    response = await (
-        http.MultipartRequest('POST', _getUri(connection.url, 'image_upload'))
+    var request = http.MultipartRequest('POST', _getUri(connection.url, 'image_upload'))
           ..fields['tags'] = jsonEncode(record.tags)
-          ..fields['hash'] = record.hash
+          ..fields['uuid'] = record.uuid
           ..fields['team'] = '${record.team}'
-          ..files.add(http.MultipartFile.fromBytes('image', data, contentType: http_parser.MediaType("image", "jpg"), filename: 'upload.jpg'))
-    ).send();
+          ..files.add(http.MultipartFile.fromBytes('image', data, contentType: http_parser.MediaType("image", "jpg"), filename: 'upload.jpg'));
+    response = await connection.client.send(request);
   } catch (e) {
     rethrow;
   }

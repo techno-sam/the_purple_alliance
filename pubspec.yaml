@@ -51,6 +51,7 @@ dependencies:
   crypto: ^3.0.2
   http_parser: ^4.0.2
   file_picker: ^5.2.9
+  uuid: ^3.0.7
 
 dev_dependencies:
   flutter_test:

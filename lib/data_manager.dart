@@ -10,11 +10,16 @@ import 'package:path_provider/path_provider.dart';
 import 'package:the_purple_alliance/network.dart';
 import 'package:the_purple_alliance/util.dart';
 import 'package:the_purple_alliance/widgets.dart';
+import 'package:uuid/uuid.dart';
 
 final Map<Type, DataValue Function(Map<String, dynamic>)> _valueTypes = {};
 
 int _generateTimestamp() {
   return DateTime.now().toUtc().millisecondsSinceEpoch;
+}
+
+String _makeUUID() {
+  return const Uuid().v4().replaceAll("-", "").replaceAll("_", "");
 }
 
 abstract class DataValue {
@@ -397,13 +402,13 @@ class TeamDataManager {
 }
 
 class ImageRecord {
-  final String hash; //FIXME hash bad, use uuid.
+  final String uuid; //DONE hash bad, use uuid.
   final String author;
   final List<String> tags;
   final int team;
 
-  ImageRecord(this.hash, this.author, this.tags, this.team) {
-    for (var character in hash.characters) {
+  ImageRecord(this.uuid, this.author, this.tags, this.team) {
+    for (var character in uuid.characters) {
       if (!("0123456789abcdef".contains(character))) {
         throw "Illegal hash passed to image record, aborting";
       }
@@ -429,17 +434,17 @@ class ImageRecord {
     if (other is! ImageRecord) {
       return false;
     }
-    return hash == other.hash && author == other.author && tagsEqual(other) && team == other.team;
+    return uuid == other.uuid && author == other.author && tagsEqual(other) && team == other.team;
   }
 
   static ImageRecord? fromJson(dynamic item) {
     if (item is Map<String, dynamic>) {
       var author = item['author'];
       var tags = item['tags'];
-      var hash = item['hash'];
+      var uuid = item['uuid'];
       var team = item['team'];
-      if (author is String && tags is List && hash is String && team is int) {
-        return ImageRecord(hash, author, tags.whereType<String>().toList(), team);
+      if (author is String && tags is List && uuid is String && team is int) {
+        return ImageRecord(uuid, author, tags.whereType<String>().toList(), team);
       }
     }
     return null;
@@ -449,14 +454,14 @@ class ImageRecord {
     return {
       'author': author,
       'tags': tags,
-      'hash': hash,
+      'uuid': uuid,
       'team': team
     };
   }
 
   @override
   int get hashCode {
-    return Object.hash(hash, author, tags, team);
+    return Object.hash(uuid, author, tags, team);
   }
 }
 
@@ -468,14 +473,18 @@ Future<String> get imagesPath async {
   return "${directory.path}/the_purple_alliance/images";
 }
 
-Future<File> getImageFile(String hash, {bool quick = false}) async {
-  assert (hash.length >= 2);
+Future<String> getImagePath(String uuid, {bool quick = false}) async {
+  assert (uuid.length >= 2);
   final path = await imagesPath;
-  final imagePath = '$path/${hash.substring(0, 2)}';
+  final imagePath = '$path/${uuid.substring(0, 2)}';
   if (!quick) {
     await Directory(imagePath).create(recursive: true);
   }
-  return File('$imagePath/$hash.jpg');
+  return '$imagePath/$uuid.jpg';
+}
+
+Future<File> getImageFile(String uuid, {bool quick = false}) async {
+  return File(await getImagePath(uuid, quick: quick));
 }
 
 
@@ -490,19 +499,41 @@ class ImageSyncManager extends ChangeNotifier {
   late Connection Function() _getConnection;
   late ImageSyncMode Function() _getMode;
   late int? Function() _getSelectedTeam;
+  late bool Function() _isReady;
   Set<String> get downloadedHashes => _downloadedHashes;
   List<ImageRecord> get knownImages => _knownImages;
-  Iterable<ImageRecord> get notDownloaded => _knownImages.where((element) => !_downloadedHashes.contains(element.hash));
+  Iterable<ImageRecord> get notDownloaded => _knownImages.where((element) => !_downloadedHashes.contains(element.uuid));
+  List<String> _serverKnownUuids = [];
+
+  bool isKnown(String uuid) => _serverKnownUuids.contains(uuid);
+
+  Future<void> remindUpload(String uuid) async {
+    if (!isKnown(uuid)) {
+      ImageRecord record;
+      try {
+        record = _knownImages.firstWhere((element) => element.uuid == uuid);
+      } on StateError {
+        return;
+      }
+      _toUpload.add(Pair.of(await getImagePath(uuid, quick: true), record));
+      await runUpload(_getConnection(), latest: true);
+      await runMetaDownload(_getConnection());
+    }
+  }
   
   late Timer _transferTimer;
   bool _alreadyTransferring = false;
   
-  ImageSyncManager(Connection Function() getConnection, ImageSyncMode Function() getMode, int? Function() getSelectedTeam) {
+  ImageSyncManager(Connection Function() getConnection, ImageSyncMode Function() getMode, int? Function() getSelectedTeam, bool Function() isReady) {
     _getConnection = getConnection;
     _getMode = getMode;
     _getSelectedTeam = getSelectedTeam;
+    _isReady = isReady;
     _transferTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
       if (_alreadyTransferring) {
+        return;
+      }
+      if (!_isReady()) {
         return;
       }
       _alreadyTransferring = true;
@@ -526,6 +557,7 @@ class ImageSyncManager extends ChangeNotifier {
     _toDownload.clear();
     _downloadedHashes.clear();
     _knownImages.clear();
+    _serverKnownUuids.clear();
   }
   
   Future<void> addTakenPicture(int team, String author, List<String> tags, String file) async {
@@ -533,7 +565,7 @@ class ImageSyncManager extends ChangeNotifier {
     if (!await imageFile.exists()) {
       return;
     }
-    _toCopy.add(Pair.of(file, ImageRecord(sha256Hash(await imageFile.readAsBytes()), author, tags, team)));
+    _toCopy.add(Pair.of(file, ImageRecord(_makeUUID(), author, tags, team)));
   }
 
   Future<String> get _localPath async {
@@ -547,7 +579,7 @@ class ImageSyncManager extends ChangeNotifier {
   }
 
   void addToDownloadManual(ImageRecord record) {
-    String hash = record.hash;
+    String hash = record.uuid;
     if (!_toDownload.contains(hash)) {
       _toDownload.add(hash);
     }
@@ -559,48 +591,50 @@ class ImageSyncManager extends ChangeNotifier {
       return;
     }
     int? teamNumber = _getSelectedTeam();
-    _toDownload.addAll(records.where((element) => mode == ImageSyncMode.all || element.team == teamNumber).map((element) => element.hash));
+    _toDownload.addAll(records.where((element) => mode == ImageSyncMode.all || element.team == teamNumber).map((element) => element.uuid));
   }
 
   Future<void> runMetaDownload(Connection connection) async {
-    Pair<List<ImageRecord>, List<String>> data = await compute2((conn, knownImg) async {
-      List<String>? hashes = await compute(getExistingHashes, conn);
-      if (hashes == null) {
-        return Pair.of([], []);
+    Triple<List<ImageRecord>, List<String>, List<String>> data = await compute2((conn, knownImg) async {
+      List<String>? uuids = await compute(getExistingUuids, conn);
+      if (uuids == null) {
+        return Triple.of([], [], []);
       }
+      var knownUuids = [...uuids]; // just to have a copy
       List<String> toRemove = [];
-      for (String hash in knownImg.map((element) => element.hash)) { // don't need to fetch existing meta
-        if (hashes.contains(hash)) {
-          hashes.remove(hash);
+      for (String uuid in knownImg.map((element) => element.uuid)) { // don't need to fetch existing meta
+        if (uuids.contains(uuid)) {
+          uuids.remove(uuid);
         } else {
-          toRemove.add(hash);
+          toRemove.add(uuid);
         }
       }
       List<ImageRecord> newImg = [];
-      for (String hash in hashes) {
-        ImageRecord? record = await compute2(getImageMeta, conn, hash);
+      for (String uuid in uuids) {
+        ImageRecord? record = await compute2(getImageMeta, conn, uuid);
         if (record != null) {
           newImg.add(record);
         }
       }
-      return Pair.of(newImg, toRemove);
+      return Triple.of(newImg, toRemove, knownUuids);
     }, connection, _knownImages);
     List<ImageRecord> newImages = data.first;
-    List<String> removedHashes = data.second;
-    for (String toRemove in removedHashes) {
+    List<String> removedUuids = data.second;
+    for (String toRemove in removedUuids) {
       _downloadedHashes.remove(toRemove);
-      _knownImages.removeWhere((element) => element.hash == toRemove);
+      _knownImages.removeWhere((element) => element.uuid == toRemove);
     }
+    _serverKnownUuids = data.third;
     _knownImages.addAll(newImages);
     addToDownload(newImages);
-//    _toDownload.addAll(newImages.map((element) => element.hash));
+//    _toDownload.addAll(newImages.map((element) => element.uuid));
 //    log('_toDownload: $_toDownload');
   }
 
   void queueForDownload({int? team, String? hash}) {
     var toQueue = _knownImages.where((record) {
-      return (team == null || record.team == team) && (hash == null || record.hash == hash);
-    }).map((record) => record.hash);
+      return (team == null || record.team == team) && (hash == null || record.uuid == hash);
+    }).map((record) => record.uuid);
     _toDownload.addAll(toQueue);
   }
 
@@ -627,39 +661,38 @@ class ImageSyncManager extends ChangeNotifier {
       log("Copying ${data.first}");
       if (image != null) {
         final Uint8List jpg = encodeJpg(image, quality: _jpgQuality);
-        String newHash = sha256Hash(jpg);
-        if (_knownImages.map((element) => element.hash).contains(newHash)) {
+        if (_knownImages.map((element) => element.uuid).contains(data.second.uuid)) {
           return;
         }
-        _toUpload.add(Pair.of(data.first, ImageRecord("", data.second.author, data.second.tags, data.second.team)));
-        final destFile = await getImageFile(newHash);
+        _toUpload.add(Pair.of(data.first, data.second));
+        final destFile = await getImageFile(data.second.uuid);
         await destFile.writeAsBytes(jpg);
         log("Copied to ${destFile.path}");
-        final ImageRecord record = ImageRecord(newHash, data.second.author, data.second.tags, data.second.team);
-        _copied[data.first] = record;
+//        final ImageRecord record = ImageRecord(newHash, data.second.author, data.second.tags, data.second.team);
+        _copied[data.first] = data.second;
 //        _loadedImages.add(data.second);
-        _downloadedHashes.add(newHash);
-        _knownImages.add(record);
+        _downloadedHashes.add(data.second.uuid);
+        _knownImages.add(data.second);
         notifyListeners();
       }
     }
   }
 
-  Future<void> runUpload(Connection connection) async { //should be run in timer
+  Future<void> runUpload(Connection connection, {bool latest = false}) async { //should be run in timer
     if (_toUpload.isNotEmpty) {
-      final Pair<String, ImageRecord> data = _toUpload.removeAt(0);
+      final Pair<String, ImageRecord> data = latest ? _toUpload.removeLast() : _toUpload.removeAt(0);
       try {
         File srcFile;
         bool needsConversion = false;
         var record = data.second;
         if (_copied.keys.contains(data.first)) {
           record = _copied[data.first]!;
-          srcFile = await getImageFile(record.hash);
+          srcFile = await getImageFile(record.uuid);
         } else {
           srcFile = File(data.first);
           needsConversion = true;
           if (!(await srcFile.exists())) {
-            srcFile = await getImageFile(record.hash);
+            srcFile = await getImageFile(record.uuid);
             needsConversion = false;
           }
         }
@@ -675,6 +708,7 @@ class ImageSyncManager extends ChangeNotifier {
           imgData = encodeJpg(decoded, quality: _jpgQuality);
         }
         await compute3(uploadImage, connection, record, imgData);
+        _serverKnownUuids.add(record.uuid);
       } catch (e) {
         log('Error during upload: $e');
         _toUpload.add(data);
@@ -718,7 +752,7 @@ class ImageSyncManager extends ChangeNotifier {
           }
         }
       }
-      var toDownload = _knownImages.map((element) => element.hash).toList();
+      var toDownload = _knownImages.map((element) => element.uuid).toList();
       for (String hash in _downloadedHashes) {
         toDownload.remove(hash);
       }
