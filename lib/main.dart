@@ -104,6 +104,8 @@ class MyAppState extends ChangeNotifier {
     }
     notifyListeners();
   }
+
+  bool gridMode = true;
   
   late final ImageSyncManager imageSyncManager = ImageSyncManager(() => httpClient, () => imageSyncMode, () => builder?.currentTeam, () => locked);
 

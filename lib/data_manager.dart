@@ -509,7 +509,7 @@ class ImageSyncManager extends ChangeNotifier {
   Set<String> get downloadedUUIDs => _downloadedUUIDs;
   List<ImageRecord> get knownImages => _knownImages;
   Iterable<ImageRecord> get notDownloaded => _knownImages.where((element) => !_downloadedUUIDs.contains(element.uuid));
-  List<String> _serverKnownUuids = [];
+  List<String> _serverKnownUuids = []; // write to disk, otherwise upload buttons show up when the server already knows about stuff
 
   bool isKnown(String uuid) => _serverKnownUuids.contains(uuid);
 
@@ -768,6 +768,10 @@ class ImageSyncManager extends ChangeNotifier {
         toDownload.remove(hash);
       }
       _toDownload.addAll(toDownload);
+      var knownUuidsData = decoded['server_known_uuids'];
+      if (knownUuidsData is List) {
+        _serverKnownUuids = knownUuidsData.whereType<String>().toList();
+      }
       notifyListeners();
     } else {
       log('Invalid data format for image metadata store ${decoded.runtimeType}');
@@ -787,6 +791,7 @@ class ImageSyncManager extends ChangeNotifier {
       'image_meta': imageMeta,
       'to_upload': uploadData,
       'downloaded_hashes': _downloadedUUIDs.toList(),
+      'server_known_uuids': _serverKnownUuids,
     });
     final file = await _dataFile;
     return await compute(file.writeAsString, data);

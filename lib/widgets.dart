@@ -1,7 +1,6 @@
 import 'dart:developer';
 import 'dart:math' as math;
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
 import 'package:adaptive_navigation/adaptive_navigation.dart';
@@ -12,9 +11,19 @@ import 'package:the_purple_alliance/main.dart';
 import 'package:camera/camera.dart';
 import 'package:the_purple_alliance/util.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:uuid/uuid.dart';
 
 import 'data_manager.dart';
+
+const Set<PointerDeviceKind> _extendedScrollableTypes = <PointerDeviceKind>{
+  PointerDeviceKind.touch,
+  PointerDeviceKind.stylus,
+  PointerDeviceKind.invertedStylus,
+  PointerDeviceKind.trackpad,
+  // The VoiceAccess sends pointer events with unknown type when scrolling
+  // scrollables.
+  PointerDeviceKind.unknown,
+  PointerDeviceKind.mouse,
+};
 
 class PhotosPage extends StatefulWidget {
   final String heroTag;
@@ -29,8 +38,10 @@ class PhotosPage extends StatefulWidget {
 
 class _PhotosPageState extends State<PhotosPage> {
   late CameraDescription _cameraDescription;
-  bool gridMode = true;
-  final Map<String, GlobalKey<State<ImageTile>>> _keys = {};
+  final Map<String, GlobalKey<State<ImageTile>>> _gridKeys = {};
+  final Map<String, GlobalKey<State<ImageCard>>> _listKeys = {};
+
+  final ScrollController _imagesController = ScrollController();
 
   @override
   void initState() {
@@ -53,6 +64,28 @@ class _PhotosPageState extends State<PhotosPage> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     var appState = context.watch<MyAppState>();
+    cameraHandler(ImageSyncManager imageSyncManager) async {
+      var navigator = Navigator.of(context);
+      final String? imagePath = await navigator.push(MaterialPageRoute(
+        builder: (_) =>
+        isCameraSupported()
+            ? TakePhoto(camera: _cameraDescription)
+            : const TakePhotoFake(),
+      ));
+      log("imagePath: $imagePath");
+      if (imagePath != null) {
+        final ImageRecord? imageRecord = await navigator.push(MaterialPageRoute(
+            builder: (_) => PhotoMeta(imagePath: imagePath,
+                teamNumber: widget.teamNumber)
+        ));
+        log("Record: $imageRecord");
+        if (imageRecord != null) {
+          imageSyncManager.addTakenPicture(
+              imageRecord.team, imageRecord.author, imageRecord.tags,
+              imagePath);
+        }
+      }
+    }
     return Scaffold(
       appBar: AppBar(
         backgroundColor: theme.primaryColorDark,
@@ -61,50 +94,92 @@ class _PhotosPageState extends State<PhotosPage> {
       ),
       body: Center(
         child: Consumer<ImageSyncManager>(
-          builder: (context, imageSyncManager, child) => GridView.builder(
-            itemCount: imageSyncManager.knownImages.length + 1,
+          builder: (context, imageSyncManager, child) => appState.gridMode ? GridView.builder(
+            itemCount: imageSyncManager.knownImages.where((record) => record.team == widget.teamNumber).length + 1,
             gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
               maxCrossAxisExtent: 100,
               childAspectRatio: 1.0,
             ),
             itemBuilder: (context, index) {
-              String? hash = index == 0 ? null : appState.imageSyncManager.knownImages[index - 1].uuid;
-              return index == 0 ? CameraTile(() async {
-                var navigator = Navigator.of(context);
-                final String? imagePath = await navigator.push(MaterialPageRoute(
-                  builder: (_) =>
-                  isCameraSupported()
-                      ? TakePhoto(camera: _cameraDescription)
-                      : const TakePhotoFake(),
-                ));
-                log("imagePath: $imagePath");
-                if (imagePath != null) {
-                  final ImageRecord? imageRecord = await navigator.push(MaterialPageRoute(
-                      builder: (_) => PhotoMeta(imagePath: imagePath,
-                          teamNumber: widget.teamNumber)
-                  ));
-                  log("Record: $imageRecord");
-                  if (imageRecord != null) {
-                    imageSyncManager.addTakenPicture(
-                        imageRecord.team, imageRecord.author, imageRecord.tags,
-                        imagePath);
-                  }
-                }
-              }) : ImageTile(index - 1,
+              String? hash = index == 0 ? null : appState.imageSyncManager.knownImages.where((record) => record.team == widget.teamNumber).elementAt(index - 1).uuid;
+              return index == 0 ? CameraTile(() async => await cameraHandler(imageSyncManager)) : ImageTile(index - 1,
                   hash!,
-                  key: _keys.putIfAbsent(hash, () => GlobalKey<State<ImageTile>>(debugLabel: "imageTile$hash")));
+                  key: _gridKeys.putIfAbsent(hash, () => GlobalKey<State<ImageTile>>(debugLabel: "imageTile$hash")));
             },
+          ) : ScrollConfiguration(
+            behavior: ScrollConfiguration.of(context).copyWith(dragDevices: _extendedScrollableTypes),
+            child: Scrollbar(
+              controller: _imagesController,
+              scrollbarOrientation: ScrollbarOrientation.bottom,
+              child: ListView.builder(
+                controller: _imagesController,
+                scrollDirection: Axis.horizontal,
+                itemCount: imageSyncManager.knownImages.where((record) => record.team == widget.teamNumber).length + 1,
+                prototypeItem: const AspectRatio(aspectRatio: 5/8),
+                itemBuilder: (context, index) {
+                  String? hash = index ==0 ? null : appState.imageSyncManager.knownImages.where((record) => record.team == widget.teamNumber).elementAt(index - 1).uuid;
+                  return index == 0 ? CameraCard(() async => await cameraHandler(imageSyncManager)) : ImageCard(index - 1, hash!, key: _listKeys.putIfAbsent(hash, () => GlobalKey<State<ImageCard>>(debugLabel: "ImageCard$hash")));
+                }
+                /*children: [
+                  CameraCard(() async => await cameraHandler(imageSyncManager)),
+                ],*/
+              ),
+            ),
           ),
         ),
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
           setState(() {
-            gridMode = !gridMode;
+            appState.gridMode = !appState.gridMode;
           });
         },
-        child: Icon(gridMode ? Icons.grid_view : Icons.list),
+        child: Icon(appState.gridMode ? Icons.grid_view : Icons.list),
       )
+    );
+  }
+}
+
+class CameraCard extends StatelessWidget {
+  final void Function() onTap;
+  const CameraCard(this.onTap, {
+    super.key,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return AspectRatio(
+      aspectRatio: 5/8,
+      child: Card(
+          elevation: 3,
+          child: InkWell(
+            onTap: this.onTap,
+            customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
+            child: Container(
+              padding: EdgeInsets.symmetric(vertical: 18, horizontal: 25),
+              child: Column(
+//              mainAxisAlignment: MainAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  Text(
+                    'Attach Picture',
+                    style: TextStyle(fontSize: 17.0, color: theme.colorScheme.onPrimaryContainer),
+                  ),
+                  Expanded(
+                    child: Center(
+                      child: Icon(
+                        Icons.photo_camera_outlined,
+                        color: theme.primaryColorDark,//Colors.indigo.shade400,
+                        size: 128,
+                      ),
+                    ),
+                  )
+                ],
+              ),
+            ),
+          )
+      ),
     );
   }
 }
@@ -120,8 +195,148 @@ class CameraTile extends StatelessWidget {
         child: InkWell(
             onTap: onTap,
             customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
-            child: const Icon(Icons.camera_alt_outlined, size: 48,)
+            child: const Icon(Icons.photo_camera_outlined, size: 48,)
         )
+    );
+  }
+}
+
+class ImageCard extends StatefulWidget {
+  final int index;
+  final String hash;
+  const ImageCard(this.index, this.hash, {super.key});
+
+  @override
+  State<ImageCard> createState() => _ImageCardState();
+}
+
+class _ImageCardState extends State<ImageCard> {
+  late Future<File> _imageFuture;
+  final GlobalKey<State<FutureBuilder>> _imgKey = GlobalKey<State<FutureBuilder>>(debugLabel: "futureImage");
+  final GlobalKey<State<FutureBuilder>> _imgKeyInner = GlobalKey<State<FutureBuilder>>(debugLabel: "futureImageInner");
+  final ScrollController _tagsController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _imageFuture = getImageFile(widget.hash, quick: true).then((f) async {
+      while (!(await f.exists())) {
+        await Future.delayed(const Duration(milliseconds: 100));
+      }
+      return f;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    var appState = context.watch<MyAppState>();
+    var syncManager = appState.imageSyncManager;
+    ImageRecord record = syncManager.knownImages[widget.index];
+    String hash = record.uuid;
+    bool imageExists = syncManager.downloadedUUIDs.contains(hash);
+
+    var placeholder = Icon(
+        Icons.photo_outlined,
+        size: 50,
+        color: (theme.iconTheme.color ?? Colors.black).withOpacity(
+            0.15));
+    var heroTag = "photo_${record.uuid}";
+
+    return AspectRatio(
+      aspectRatio: 5/8,
+      child: Card(
+          elevation: 3,
+          child: InkWell(
+            onTap: () {
+              //log("tapped image ${widget.index}");
+              /*setState(() {
+                _showImg = !_showImg;
+              });*/
+              if (syncManager.downloadedUUIDs.contains(hash)) {
+                Navigator.of(context).push(MaterialPageRoute(
+                    builder: (context) {
+                      return ImageDetailsPage(heroTag: heroTag, imgKeyInner: _imgKeyInner, imageFuture: _imageFuture, placeholder: placeholder, theme: theme, record: record);
+                    }
+                ));
+              } else {
+                syncManager.addToDownloadManual(record);
+              }
+            },
+            customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
+            child: Container(
+              padding: EdgeInsets.symmetric(vertical: 18, horizontal: 25),
+              child: Column(
+                children: [
+                  /*Text(
+                    'Author: ${record.author}',
+                    style: TextStyle(fontSize: 17.0, color: theme.colorScheme.onPrimaryContainer),
+                  ),
+                   */
+                  FittedBox(
+                    fit: BoxFit.fitWidth,
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.baseline,
+                      textBaseline: TextBaseline.alphabetic,
+                      children: [
+                        Hero(tag: "author_label_${record.uuid}", child: Text("Author: ", style: theme.textTheme.titleMedium?.copyWith(fontSize: 17.0, color: theme.colorScheme.onPrimaryContainer) ?? TextStyle(fontSize: 17.0, color: theme.colorScheme.onPrimaryContainer))),
+                        Hero(tag: "author_content_${record.uuid}", child: Material(color: Colors.transparent, child: Text(record.author, style: TextStyle(fontSize: 16.0, color: theme.colorScheme.onPrimaryContainer)))),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Hero(
+                      tag: heroTag,
+                      child: Center(
+                        child: (imageExists
+                            ? FutureBuilder(key: _imgKey, future: _imageFuture, builder: (context, snapshot) {
+                          if (snapshot.data != null) {
+                            return ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.file(snapshot.data!)
+                            );
+                          } else {
+                            return placeholder;
+                          }
+                        })// Image.network('https://picsum.photos/250?image=${widget.index}')
+                            : placeholder),
+                      ),
+                    ),
+                  ),
+                  const Divider(),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Text(record.tags.isEmpty ? "No Tags" : "Tags:", style: theme.textTheme.titleMedium),
+                      if (record.tags.isNotEmpty)
+                        const SizedBox(width: 8),
+                      if (record.tags.isNotEmpty)
+                        Expanded(
+                          child: Scrollbar(
+                            controller: _tagsController,
+                            scrollbarOrientation: ScrollbarOrientation.bottom,
+                            child: SingleChildScrollView(
+                              controller: _tagsController,
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                  children: [
+                                    for (String tag in record.tags)
+                                      Card(child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+                                        child: Text(tag, style: theme.textTheme.bodyLarge?.copyWith(fontSize: 16)),
+                                      )),
+                                  ]
+                              ),
+                            ),
+                          ),
+                        )
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          )
+      ),
     );
   }
 }
@@ -175,7 +390,7 @@ class _ImageTileState extends State<ImageTile> {
     return Card(
         child: InkWell(
             onTap: () {
-              log("tapped image ${widget.index}");
+              //log("tapped image ${widget.index}");
               /*setState(() {
                 _showImg = !_showImg;
               });*/
@@ -218,7 +433,7 @@ class _ImageTileState extends State<ImageTile> {
 }
 
 class ImageDetailsPage extends StatelessWidget {
-  const ImageDetailsPage({
+  ImageDetailsPage({
     super.key,
     required this.heroTag,
     required GlobalKey<State<FutureBuilder>> imgKeyInner,
@@ -234,6 +449,7 @@ class ImageDetailsPage extends StatelessWidget {
   final Icon placeholder;
   final ThemeData theme;
   final ImageRecord record;
+  final ScrollController _tagsController = ScrollController();
 
   @override
   Widget build(BuildContext context) {
@@ -280,8 +496,8 @@ class ImageDetailsPage extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.baseline,
               textBaseline: TextBaseline.alphabetic,
               children: [
-                Text("Author: ", style: theme.textTheme.titleMedium),
-                Text(record.author),
+                Hero(tag: "author_label_${record.uuid}", child: Text("Author: ", style: theme.textTheme.titleMedium)),
+                Hero(tag: "author_content_${record.uuid}", child: Material(color: Colors.transparent, child: Text(record.author))),
 //                                const SizedBox(width: 30),
                 const SizedBox(height: 30, child: VerticalDivider(indent: 8, thickness: 1, width: 16, color: Colors.grey,)),
 ////                                const Spacer(flex: 2),
@@ -295,16 +511,24 @@ class ImageDetailsPage extends StatelessWidget {
                         const SizedBox(width: 8),
                       if (record.tags.isNotEmpty)
                         Expanded(
-                          child: SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                for (String tag in record.tags)
-                                  Card(child: Padding(
-                                    padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
-                                    child: Text(tag, style: theme.textTheme.bodyLarge?.copyWith(fontSize: 16)),
-                                  )),
-                              ]
+                          child: ScrollConfiguration(
+                            behavior: ScrollConfiguration.of(context).copyWith(dragDevices: _extendedScrollableTypes),
+                            child: Scrollbar(
+                              controller: _tagsController,
+                              scrollbarOrientation: ScrollbarOrientation.bottom,
+                              child: SingleChildScrollView(
+                                controller: _tagsController,
+                                scrollDirection: Axis.horizontal,
+                                child: Row(
+                                  children: [
+                                    for (String tag in record.tags)
+                                      Card(child: Padding(
+                                        padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 8),
+                                        child: Text(tag, style: theme.textTheme.bodyLarge?.copyWith(fontSize: 16)),
+                                      )),
+                                  ]
+                                ),
+                              ),
                             ),
                           ),
                         )
