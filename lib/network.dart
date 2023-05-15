@@ -2,7 +2,6 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -65,7 +64,7 @@ Future<bool> testUnauthorizedConnection(String url) async {
   } on TimeoutException {
     return false;
   } catch (e) {
-    print('Connection error: $e');
+    log('Connection error (testUnauthorizedConnection): $e');
     return false;
   }
   if (response.statusCode == 200) {
@@ -83,7 +82,7 @@ Future<bool> testAuthorizedConnection(Connection connection) async {
   } on TimeoutException {
     return false;
   } catch (e) {
-    log('Connection error: $e');
+    log('Connection error (testAuthorizedConnection): $e');
     return false;
   }
   if (response.statusCode == 200) {
@@ -99,7 +98,7 @@ Future<List<dynamic>> getScheme(Connection connection) async {
   try {
     response = await connection.client.get(_getUri(connection.url, 'scheme.json'));
   } catch (e) {
-    log('Connection error: $e');
+    log('Connection error (getScheme): $e');
     return [];
   }
   if (response.statusCode == 200) {
@@ -118,7 +117,7 @@ Future<Map<String, dynamic>> getServerMeta(Connection connection) async {
   try {
     response = await connection.client.get(_getUri(connection.url, 'meta.json'));
   } catch (e) {
-    log('Connection error: $e');
+    log('Connection error (getServerMeta): $e');
     return {};
   }
   if (response.statusCode == 200) {

@@ -100,11 +100,24 @@ class DropdownDataValue extends DataValue {
   String _value = "";
   late final List<String> _options;
   late final String _default;
+  late final bool canBeOther;
+  String _otherValue = "";
+
+  String get otherValue => _otherValue;
+  set otherValue(String otherValue) {
+    if (_otherValue != otherValue) {
+      _otherValue = otherValue;
+      markChange();
+    }
+  }
 
   DropdownDataValue(Map<String, dynamic> initData) {
     _options = List<String>.from(initData["options"]);
     _value = initData.containsKey("default") ? initData["default"] : _options[0];
-    if (!_options.contains(_value)) {
+
+    canBeOther = initData.containsKey("other") ? initData["other"] : false;
+
+    if (!(_options.contains(_value) || (_value == "Other" && canBeOther))) {
       _value = _options[0];
     }
     _default = _value;
@@ -112,28 +125,34 @@ class DropdownDataValue extends DataValue {
 
   @override
   void fromJson(data) {
-    assert (data is String);
-    if (_options.contains(data)) {
-      _value = data;
+    assert (data is Map<String, dynamic>);
+    String value = data["value"];
+    if (_options.contains(value) || (value == "Other" && canBeOther)) {
+      _value = value;
     }
+    _otherValue = data["other_value"];
   }
 
   @override
   toJson() {
-    return _value;
+    return {
+      "value": _value,
+      "other_value": _otherValue,
+    };
   }
 
   @override
   void reset() {
     super.reset();
     _value = _default;
+    _otherValue = "";
   }
 
   List<String> get options => List.unmodifiable(_options);
 
   String get value => _value;
   set value(String value) {
-    if (_options.contains(value)) {
+    if (_options.contains(value) || (value == "Other" && canBeOther)) {
       _value = value;
       markChange();
     }
@@ -149,6 +168,8 @@ class StarRatingDataValue extends DataValue with TimestampSpecialBehaviorMixin {
   }
 
   double? averageValue;
+  bool? _single;
+  bool get single => _single == true;
 
   StarRatingDataValue();
 
@@ -157,6 +178,7 @@ class StarRatingDataValue extends DataValue with TimestampSpecialBehaviorMixin {
     assert (data is Map<String, dynamic>);
     _personalValue = data["personal_value"];
     averageValue = data["average_value"];
+    _single = data["single"];
   }
 
   @override
@@ -165,6 +187,7 @@ class StarRatingDataValue extends DataValue with TimestampSpecialBehaviorMixin {
     // we always set the average value, since that is server-calculated
     // we only set the personal value if it is newer than the local value, or if the local value does not exist
     averageValue = data["average_value"];
+    _single = data["single"];
     if (localOld || _personalValue == null) {
       _personalValue = data["personal_value"];
       return false; // data is now completely from the server, update timestamp to match
@@ -182,7 +205,8 @@ class StarRatingDataValue extends DataValue with TimestampSpecialBehaviorMixin {
   toJson() {
     return {
       "personal_value": _personalValue,
-      "average_value": averageValue, // this is, of course, ignored by the server and overriden with a more accurate average value - the server also overrides the time-based system
+      "average_value": averageValue, // this is, of course, ignored by the server and overridden with a more accurate average value - the server also overrides the time-based system
+      "single": single,
     };
   }
 }

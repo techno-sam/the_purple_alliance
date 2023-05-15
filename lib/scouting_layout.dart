@@ -153,37 +153,119 @@ class DropdownWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<Dropdown
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    return DropdownWithOther(key: Key("${_key}_outer"), padding: _padding, formKey: _key, label: _label, dataValue: _dataValue, theme: theme);
+  }
+}
+
+class DropdownWithOther extends StatefulWidget {
+  const DropdownWithOther({
+    super.key,
+    required double? padding,
+    required String formKey,
+    required String label,
+    required DropdownDataValue? dataValue,
+    required this.theme,
+  }) : _padding = padding, _key = formKey, _label = label, _dataValue = dataValue;
+
+  final double? _padding;
+  final String _key;
+  final String _label;
+  final DropdownDataValue? _dataValue;
+  final ThemeData theme;
+
+  @override
+  State<DropdownWithOther> createState() => _DropdownWithOtherState();
+}
+
+class _DropdownWithOtherState extends State<DropdownWithOther> {
+
+  late final TextEditingController _controller;
+
+  _DropdownWithOtherState();
+
+
+  @override
+  void initState() {
+    super.initState();
+    _showOtherField = widget._dataValue?.canBeOther == true && widget._dataValue?.value == "Other";
+    _controller = TextEditingController(text: widget._dataValue?.otherValue ?? "");
+  }
+
+  bool get _canBeOther => widget._dataValue?.canBeOther == true;
+  late bool _showOtherField;
+
+  void update() {
+    setState(() {
+      _showOtherField = _canBeOther && widget._dataValue?.value == "Other";
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.all(_padding ?? 8.0),
+      padding: EdgeInsets.all(widget._padding ?? 8.0),
       child: Consumer<MyAppState>(
         builder: (context, appState, child) {
-          return DropdownButtonFormField(
-            key: Key(_key),
+          var dropdown = DropdownButtonFormField(
+            key: Key(widget._key),
             decoration: InputDecoration(
               border: const OutlineInputBorder(),
-              labelText: _label,
+              labelText: widget._label,
             ),
             items: [
-              if (_dataValue != null)
-                for (String value in _dataValue!.options)
+              if (widget._dataValue != null)
+                for (String value in widget._dataValue!.options)
                   DropdownMenuItem(
                     value: value,
                     child: Text(
                       value,
                       style: TextStyle(
-                        color: theme.colorScheme.onPrimaryContainer,
+                        color: widget.theme.colorScheme.onPrimaryContainer,
                       ),
                     ),
                   ),
+              if (widget._dataValue != null && widget._dataValue!.canBeOther)
+                DropdownMenuItem(
+                  value: "Other",
+                  child: Text(
+                    "Other",
+                    style: TextStyle(
+                      color: widget.theme.colorScheme.onPrimaryContainer,
+                    ),
+                  ),
+                ),
             ],
             onChanged: (value) {
               if (value != null) {
-                _dataValue?.value = value;
+                widget._dataValue?.value = value;
                 log("Set dropdown value to $value");
+                update();
               }
             },
-            value: _dataValue?.value,
-            dropdownColor: theme.colorScheme.primaryContainer,
+            value: widget._dataValue?.value,
+            dropdownColor: widget.theme.colorScheme.primaryContainer,
+          );
+          if (!_showOtherField) {
+            return dropdown;
+          }
+          _controller.text = widget._dataValue?.otherValue ?? _controller.text;
+          return Column(
+            children: [
+              dropdown,
+              TextFormField(
+                key: Key("${widget._key}_text"),
+                decoration: InputDecoration(
+                  border: const OutlineInputBorder(),
+                  hintText: widget._label,
+                ),
+                keyboardType: TextInputType.text,
+                controller: _controller,
+//                    initialValue: _dataValue?.personalComment ?? CommentsDataValue.getDefault(),
+                onChanged: (value) {
+                  widget._dataValue?.otherValue = value;
+                },
+              )
+            ],
           );
         },
       ),
@@ -196,7 +278,6 @@ class StarRatingWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<StarRa
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: EdgeInsets.all(_padding ?? 8.0),
       child: Consumer<MyAppState>(
@@ -210,7 +291,7 @@ class StarRatingWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<StarRa
               StarRating(
                 key: Key("$_key:rating_${_dataValue?.personalValue}"),
                 initialRating: _dataValue?.personalValue ?? 0,
-                averageRating: _dataValue?.averageValue,
+                averageRating: _dataValue?.single == true ? null : _dataValue?.averageValue,
                 onChanged: (value) {
                   _dataValue?.personalValue = value;
                 },
@@ -239,7 +320,7 @@ class CommentsWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<Comments
     return Padding(
       padding: EdgeInsets.all(_padding ?? 8.0),
       child: Card(
-          color: theme.colorScheme.primaryContainer,
+          color: oldColors ? theme.colorScheme.primaryContainer : null,
           child: Container(
               margin: const EdgeInsets.all(4.0),
               padding: const EdgeInsets.all(4.0),
@@ -319,7 +400,7 @@ class PhotosBuilder extends JsonWidgetBuilder {
     return Padding(
       padding: EdgeInsets.all(_padding ?? 8.0),
       child: Card(
-          color: theme.colorScheme.primaryContainer,
+          color: oldColors ? theme.colorScheme.primaryContainer : null,
           child: Container(
               margin: const EdgeInsets.all(4.0),
               padding: const EdgeInsets.all(4.0),
@@ -453,6 +534,7 @@ class ExperimentBuilder {
       _currentTeam = null;
       _manager = null;
     }
+    _changeNotifier();
   }
 
   void initializeValues(Iterable<String> teams) {
@@ -517,7 +599,7 @@ List<Widget> buildExperiment(BuildContext context, ExperimentBuilder? builder, v
           text: "Not loaded",
           icon: Icon(
             Icons.error_outline,
-            color: theme.colorScheme.onPrimary,
+            color: !oldColors ? null : theme.colorScheme.onPrimary,
           )
       ),
     )

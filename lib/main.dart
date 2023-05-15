@@ -31,6 +31,8 @@ void main() {
   runApp(MyApp());
 }
 
+var oldColors = false;
+
 class MyApp extends StatelessWidget {
   MyApp({super.key});
 
@@ -79,9 +81,7 @@ class MyAppState extends ChangeNotifier {
     if (__unsavedChanges != value) {
       __unsavedChanges = value;
       if ((_unsavedChangesBarState?.target?.unsavedChanges ?? value) != value) {
-        _unsavedChangesBarState?.target?.setState(() {
-          _unsavedChangesBarState?.target?.unsavedChanges = value;
-        });
+        _unsavedChangesBarState?.target?.setUnsavedChanges(value);
       }
     }
   }
@@ -312,6 +312,10 @@ class MyAppState extends ChangeNotifier {
     __password = value;
   }
 
+  void notifySettingsUpdate() {
+    notifyListeners();
+  }
+
   SyncInterval _syncInterval = SyncInterval.manual;
   SyncInterval get syncInterval => _syncInterval;
   set syncInterval(SyncInterval value) {
@@ -463,6 +467,9 @@ class MyAppState extends ChangeNotifier {
   bool _currentlyChecking = false;
 
   Future<bool> checkCompetition() async {
+    if (!locked) {
+      return false;
+    }
     if (checkedCompetition) {
       return true;
     }
@@ -634,6 +641,7 @@ class MyAppState extends ChangeNotifier {
     if (!reconnecting) {
       await saveConfig();
     }
+    _startCompetitionCheckTimer();
     await runSynchronization();
     notifyListeners();
   }
@@ -648,6 +656,7 @@ class MyAppState extends ChangeNotifier {
       notifyListeners();
     });
     await saveConfig();
+    checkTimer?.cancel();
   }
 
   Future<void> reconnect() async {
@@ -673,7 +682,21 @@ class MyAppState extends ChangeNotifier {
   bool _currentlySaving = false;
   late Timer autoSaveTimer;
 
-  late Timer checkTimer;
+  Timer? checkTimer;
+
+  void _startCompetitionCheckTimer() {
+    checkTimer?.cancel();
+    _currentlyChecking = false;
+    checkedCompetition = false;
+    checkTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
+      if (_currentlyChecking) {
+        return;
+      }
+      if (await checkCompetition()) {
+        timer.cancel();
+      }
+    });
+  }
 
   Future<void> runSynchronization() async {
     if (_noSync) {
@@ -819,14 +842,6 @@ class MyAppState extends ChangeNotifier {
     autoSaveTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       await runSave();
     });
-    checkTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
-      if (_currentlyChecking) {
-        return;
-      }
-      if (await checkCompetition()) {
-        timer.cancel();
-      }
-    });
     readConfig().then((v) async {
       log("Read config: $v");
       await _setConfig(v);
@@ -843,7 +858,7 @@ enum Pages {
   teamSelection(Icons.list, "Teams"),
   editor(Icons.edit_note, "Editor"),
   settings(Icons.settings, "Settings"),
-  cameraTest(Icons.camera, "Camera Test"),
+//  cameraTest(Icons.camera, "Camera Test"),
   ;
   final IconData icon;
   final String title;
@@ -890,23 +905,20 @@ class _MyHomePageState extends State<MyHomePage> {
       case Pages.settings:
         page = SettingsPage(); //settings
         break;
-      case Pages.cameraTest:
+      /*case Pages.cameraTest:
         page = TestCameraPage();
-        break;
+        break;*/
       default:
         throw UnimplementedError("No widget for $selectedIndex");
     }
     return GestureDetector(
       onTap: () {
-        log("Tapped somewhere!");
+        //log("Tapped somewhere!");
         FocusManager.instance.primaryFocus?.unfocus();
       },
       child: ColorAdaptiveNavigationScaffold(
         body: Container(
-          color: Theme
-              .of(context)
-              .colorScheme
-              .primaryContainer,
+          color: oldColors ? Theme.of(context).colorScheme.primaryContainer : null,
           child: page,
         ),
         destinations: [
@@ -922,6 +934,9 @@ class _MyHomePageState extends State<MyHomePage> {
             await appState.saveConfig();
           } else {
             setState(() {
+              if (!appState.locked || appState.builder == null) {
+                value = Pages.settings.index;
+              }
               if (selectedIndex != value && selectedIndex == Pages.settings.index && appState._unsavedChanges) { //if we're leaving the settings page, save the config
                 appState.saveConfig().then((_) {
                   setState(() {
@@ -1041,7 +1056,7 @@ class _MyHomePageState extends State<MyHomePage> {
             floatingActionButton: selectedPage == Pages.settings ? null : Row(
               mainAxisSize: MainAxisSize.min,
               mainAxisAlignment: MainAxisAlignment.end,
-              children: [
+              children: ["Add Team"
                 FloatingActionButton(
                   onPressed: appState.runSynchronization,
                   tooltip: "Synchronize data with server",
@@ -1201,7 +1216,8 @@ class TeamSelectionPage extends StatelessWidget {
       padding: const EdgeInsets.all(8.0),
       child: Column(
         children: [
-          Expanded(
+          if (appState.builder != null)
+            Expanded(
             child: GridView.builder(
               itemCount: teams.length,
               itemBuilder: (context, index) => TeamTile(teams[index], _viewTeam),
@@ -1216,7 +1232,7 @@ class TeamSelectionPage extends StatelessWidget {
               autovalidateMode: AutovalidateMode.onUserInteraction,
               key: _formKey,
               child: Card(
-                color: theme.colorScheme.primaryContainer,
+                color: oldColors ? theme.colorScheme.primaryContainer : null,
                 child: Padding(
                   padding: const EdgeInsets.all(8.0),
                   child: Row(
@@ -1292,7 +1308,6 @@ class TeamSelectionPage extends StatelessWidget {
                                             _entryKey.currentState!.reset();
                                             log("Continuing with $teamNum");
                                             appState.builder?.initializeTeam(teamNum);
-                                            appState.notifyListeners();
                                           }
                                         ),
                                       ],
@@ -1311,6 +1326,8 @@ class TeamSelectionPage extends StatelessWidget {
                 ),
               ),
             ),
+          if (appState.builder == null)
+            DisplayCard(text: "Not loaded", icon: Icon(Icons.error_outline, color: !oldColors ? null : theme.colorScheme.onPrimary)),
         ],
       ),
     );
@@ -1539,7 +1556,7 @@ class SettingsPage extends StatelessWidget {
                                                     appState.scaffoldKey.currentState?.showSnackBar(const SnackBar(content: Text("Obtained connection data")));
                                                     log("Connection data got!");
                                                     alreadyGot = true;
-                                                    appState.notifyListeners();
+                                                    appState.notifySettingsUpdate();
                                                     Navigator.pop(context);
                                                     break;
                                                   }
@@ -1577,8 +1594,7 @@ class SettingsPage extends StatelessWidget {
                 Expanded(
                   child: Card(
                       color: appState.locked ? theme.colorScheme
-                          .tertiaryContainer : theme.colorScheme
-                          .primaryContainer,
+                          .tertiaryContainer : (!oldColors ? null : theme.colorScheme.primaryContainer),
                       child: Padding(
                           padding: const EdgeInsets.all(20.0),
                           child: Column(
@@ -1657,7 +1673,7 @@ class SettingsPage extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Card(
-              color: theme.colorScheme.primaryContainer,
+              color: !oldColors ? null : theme.colorScheme.primaryContainer,
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: Column(
@@ -1680,7 +1696,7 @@ class SettingsPage extends StatelessWidget {
             ),
             const SizedBox(height: 10),
             Card(
-              color: theme.colorScheme.primaryContainer,
+              color: !oldColors ? null : theme.colorScheme.primaryContainer,
               child: Padding(
                 padding: const EdgeInsets.all(8.0),
                 child: Column(
@@ -1846,7 +1862,7 @@ class SettingsPage extends StatelessWidget {
 }
 
 class TestCameraPage extends StatefulWidget {
-  TestCameraPage({super.key});
+  const TestCameraPage({super.key});
 
   @override
   State<TestCameraPage> createState() => _TestCameraPageState();
@@ -1854,7 +1870,7 @@ class TestCameraPage extends StatefulWidget {
 
 class _TestCameraPageState extends State<TestCameraPage> {
   late CameraDescription _cameraDescription;
-  List<String> _images = [];
+  final List<String> _images = [];
 
   @override
   void initState() {
@@ -1867,9 +1883,9 @@ class _TestCameraPageState extends State<TestCameraPage> {
       setState(() {
         _cameraDescription = camera;
       });
-      print("Setup camera");
+      log("Setup camera");
     }).catchError((err) {
-      print(err);
+      log(err);
     });
   }
 
@@ -1877,12 +1893,12 @@ class _TestCameraPageState extends State<TestCameraPage> {
   Widget build(BuildContext context) {
     return SafeArea(
       child: SingleChildScrollView(
-        padding: EdgeInsets.only(top: 20.0, bottom: 20.0),
+        padding: const EdgeInsets.only(top: 20.0, bottom: 20.0),
         child: Column(
           children: [
-            Text("Camera test"),
+            const Text("Camera test"),
             Container(
-              padding: EdgeInsets.symmetric(horizontal: 10.0),
+              padding: const EdgeInsets.symmetric(horizontal: 10.0),
               height: 400,
               child: ListView(
                 scrollDirection: Axis.horizontal,
@@ -1983,14 +1999,27 @@ class UnsavedChangesBar extends StatefulWidget {
   final bool Function() initialValue;
 
   @override
-  State<UnsavedChangesBar> createState() => _UnsavedChangesBarState(initialValue());
+  State<UnsavedChangesBar> createState() => _UnsavedChangesBarState();
 }
 
 class _UnsavedChangesBarState extends State<UnsavedChangesBar> {
 
-  _UnsavedChangesBarState(this.unsavedChanges);
+  _UnsavedChangesBarState();
 
-  bool unsavedChanges;
+  bool unsavedChanges = false;
+
+
+  @override
+  void initState() {
+    super.initState();
+    unsavedChanges = widget.initialValue();
+  }
+
+  void setUnsavedChanges(bool unsavedChanges) {
+    setState(() {
+      this.unsavedChanges = unsavedChanges;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -2019,7 +2048,7 @@ class _UnsavedChangesBarState extends State<UnsavedChangesBar> {
                 ),
                 onPressed: () async {
                   await appState.saveConfig();
-                  print("happy with result");
+                  //print("happy with result");
                 },
                 icon: Icon(
                   Icons.save_outlined,

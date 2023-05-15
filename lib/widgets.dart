@@ -54,9 +54,9 @@ class _PhotosPageState extends State<PhotosPage> {
       setState(() {
         _cameraDescription = camera;
       });
-      print("Setup camera");
+      log("Setup camera");
     }).catchError((err) {
-      print(err);
+      log(err);
     });
   }
 
@@ -154,10 +154,10 @@ class CameraCard extends StatelessWidget {
       child: Card(
           elevation: 3,
           child: InkWell(
-            onTap: this.onTap,
+            onTap: onTap,
             customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
             child: Container(
-              padding: EdgeInsets.symmetric(vertical: 18, horizontal: 25),
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 25),
               child: Column(
 //              mainAxisAlignment: MainAxisAlignment.start,
                 crossAxisAlignment: CrossAxisAlignment.center,
@@ -265,7 +265,7 @@ class _ImageCardState extends State<ImageCard> {
             },
             customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
             child: Container(
-              padding: EdgeInsets.symmetric(vertical: 18, horizontal: 25),
+              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 25),
               child: Column(
                 children: [
                   /*Text(
@@ -466,27 +466,24 @@ class ImageDetailsPage extends StatelessWidget {
           children: [
             Flexible(
               flex: 3,
-              child: Container(
-//                                color: Colors.red,
-                child: Hero(
-                  tag: heroTag,
-                  child: Center(
-                    child: FutureBuilder(
-                      key: _imgKeyInner,
-                      future: _imageFuture,
-                      builder: (context, snapshot) {
-                        if (snapshot.data != null) {
-                          return ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.file(
-                              snapshot.data!,
-                            )
-                          );
-                        } else {
-                          return placeholder;
-                        }
+              child: Hero(
+                tag: heroTag,
+                child: Center(
+                  child: FutureBuilder(
+                    key: _imgKeyInner,
+                    future: _imageFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.data != null) {
+                        return ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(
+                            snapshot.data!,
+                          )
+                        );
+                      } else {
+                        return placeholder;
                       }
-                    ),
+                    }
                   ),
                 ),
               ),
@@ -553,7 +550,7 @@ class ImageDetailsPage extends StatelessWidget {
 }
 
 class CardPicture extends StatelessWidget {
-  CardPicture({this.onTap, this.imagePath});
+  const CardPicture({super.key, this.onTap, this.imagePath});
 
   final Function()? onTap;
   final String? imagePath;
@@ -566,10 +563,10 @@ class CardPicture extends StatelessWidget {
       return Card(
         child: Container(
           height: 300,
-          padding: EdgeInsets.all(10.0),
+          padding: const EdgeInsets.all(10.0),
           width: size.width * .70,
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.all(Radius.circular(4.0)),
+            borderRadius: const BorderRadius.all(Radius.circular(4.0)),
             image: DecorationImage(
                 fit: BoxFit.cover, image: FileImage(File(imagePath as String))),
           ),
@@ -579,7 +576,7 @@ class CardPicture extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                decoration: BoxDecoration(
+                decoration: const BoxDecoration(
                     shape: BoxShape.circle,
                     color: Colors.redAccent,
                     boxShadow: [
@@ -591,8 +588,8 @@ class CardPicture extends StatelessWidget {
                     ]
                 ),
                 child: IconButton(onPressed: (){
-                  print('icon press');
-                }, icon: Icon(Icons.delete, color: Colors.white)),
+                  log('icon press');
+                }, icon: const Icon(Icons.delete, color: Colors.white)),
               )
             ],
           ),
@@ -603,9 +600,9 @@ class CardPicture extends StatelessWidget {
     return Card(
         elevation: 3,
         child: InkWell(
-          onTap: this.onTap,
+          onTap: onTap,
           child: Container(
-            padding: EdgeInsets.symmetric(vertical: 18, horizontal: 25),
+            padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 25),
             width: size.width * .70,
             height: 100,
             child: Column(
@@ -631,7 +628,7 @@ class PhotoMeta extends StatelessWidget {
   final String imagePath;
   final int teamNumber;
   PhotoMeta({super.key, required this.imagePath, required this.teamNumber});
-  final GlobalKey<_TagSelectionState> tagSelectionKey = GlobalKey<_TagSelectionState>(debugLabel: "tagSelectionKey");
+  final GlobalKey<_TagSelectionState> _tagSelectionKey = GlobalKey<_TagSelectionState>(debugLabel: "tagSelectionKey");
 
   @override
   Widget build(BuildContext context) {
@@ -664,7 +661,7 @@ class PhotoMeta extends StatelessWidget {
                   },
                 ),
                 const Divider(indent: 5, endIndent: 5, height: 20),
-                TagSelection(key: tagSelectionKey),
+                TagSelection(key: _tagSelectionKey),
                 const Divider(indent: 5, endIndent: 5, height: 20),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -673,8 +670,8 @@ class PhotoMeta extends StatelessWidget {
                       icon: const Icon(Icons.add_a_photo, color: Colors.black),
                       label: const Text("Post", style: TextStyle(color: Colors.black)),
                       onPressed: () {
-                        print("making record: $tagSelectionKey; ${tagSelectionKey.currentState}; ${tagSelectionKey.currentState?.tags}");
-                        ImageRecord record = ImageRecord("", appState.username, tagSelectionKey.currentState?.tags ?? [], teamNumber);
+                        //print("making record: $tagSelectionKey; ${tagSelectionKey.currentState}; ${tagSelectionKey.currentState?.tags}");
+                        ImageRecord record = ImageRecord("", appState.username, _tagSelectionKey.currentState?.tags ?? [], teamNumber);
                         Navigator.of(context).pop(record);
                       },
                       style: ButtonStyle(backgroundColor: MaterialStateProperty.all(Colors.green))
@@ -802,14 +799,14 @@ class TakePhotoFake extends StatelessWidget {
       body: Center(
         child: ElevatedButton(
           onPressed: () async {
-            print("pick");
+            //print("pick");
             var navigator = Navigator.of(context);
             FilePickerResult? result = await FilePicker.platform.pickFiles(
               dialogTitle: "Image file",
               type: FileType.image,
               lockParentWindow: true,
             );
-            print('result: ${result?.files.single}');
+            //print('result: ${result?.files.single}');
             if (result?.files.single.path != null) {
               navigator.pop(result?.files.single.path);
             }
@@ -855,7 +852,7 @@ class _TakePhotoState extends State<TakePhoto> {
       XFile file = await _controller.takePicture();
       return file;
     } on CameraException catch (e) {
-      print(e);
+      log("$e");
       return null;
     }
   }
@@ -875,19 +872,18 @@ class _TakePhotoState extends State<TakePhoto> {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () async {
+          var nav = Navigator.of(context);
           final file = await takePicture();
-          Navigator.of(context).pop(file?.path);
+          nav.pop(file?.path);
         },
-        child: Icon(Icons.camera_alt),
+        child: const Icon(Icons.camera_alt),
       ),
 
       body: FutureBuilder<void>(
         future: _initializeControllerFuture,
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.done) {
-            return Container(
-              child: CameraPreview(_controller),
-            );
+            return CameraPreview(_controller);
           } else {
             return const Center(child: CircularProgressIndicator());
           }
@@ -920,36 +916,37 @@ class CommentList extends StatelessWidget {
               child: Column(
                 children: [
                   for (MapEntry<String, String> comment in comments.entries)
-                    SizedBox(
-                      height: 200,
-//                      aspectRatio: _isLargeScreen(context) ? 4 : _isMediumScreen(context) ? 3 : 2,
-                      child: Card(
-                        color: theme.primaryColorLight,
-                        elevation: 2,
-                        child: Container(
-                          margin: const EdgeInsets.all(4.0),
-                          padding: const EdgeInsets.all(4.0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(comment.key, style: theme.textTheme.headlineSmall?.copyWith(color: theme.colorScheme.onSurface)),
-                              Divider(color: theme.colorScheme.onSurface, endIndent: 50),
-                              Expanded(
-                                child: SizedBox(
-                                  width: double.infinity,
-                                  child: SingleChildScrollView(
-                                    child: Text(
-                                      comment.value,
-                                      style: TextStyle(color: theme.colorScheme.onSurface)
+                    if (comment.value != '')
+                      SizedBox(
+                        height: 200,
+  //                      aspectRatio: _isLargeScreen(context) ? 4 : _isMediumScreen(context) ? 3 : 2,
+                        child: Card(
+                          color: theme.primaryColorLight,
+                          elevation: 2,
+                          child: Container(
+                            margin: const EdgeInsets.all(4.0),
+                            padding: const EdgeInsets.all(4.0),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(comment.key, style: theme.textTheme.headlineSmall?.copyWith(color: theme.colorScheme.onSurface)),
+                                Divider(color: theme.colorScheme.onSurface, endIndent: 50),
+                                Expanded(
+                                  child: SizedBox(
+                                    width: double.infinity,
+                                    child: SingleChildScrollView(
+                                      child: Text(
+                                        comment.value,
+                                        style: TextStyle(color: theme.colorScheme.onSurface)
+                                      )
                                     )
                                   )
-                                )
-                              ),
-                            ],
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       ),
-                    ),
                 ],
               ),
             ),
@@ -981,7 +978,7 @@ class StarRating extends StatefulWidget {
   final Color? color;
 
   @override
-  State<StarRating> createState() => _StarRatingState(initialRating);
+  State<StarRating> createState() => _StarRatingState();
 }
 
 double roundDouble(double value, int places){
@@ -990,9 +987,16 @@ double roundDouble(double value, int places){
 }
 
 class _StarRatingState extends State<StarRating> {
-  double _rating;
+  double _rating = 0.0;
 
-  _StarRatingState(this._rating);
+  _StarRatingState();
+
+
+  @override
+  void initState() {
+    super.initState();
+    _rating = widget.initialRating;
+  }
 
   Widget buildStar(BuildContext context, int index) {
     Icon icon;
@@ -1052,11 +1056,11 @@ class DisplayCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final style = theme.textTheme.headlineSmall!.copyWith(
-      color: theme.colorScheme.onPrimary,
+      color: !oldColors ? null : theme.colorScheme.onPrimary,
     );
 
     return Card(
-      color: theme.colorScheme.primary,
+      color: !oldColors ? null : theme.colorScheme.primary,
       child: Padding(
         padding: const EdgeInsets.all(20.0),
         child: Row(
@@ -1091,13 +1095,13 @@ class TappableDisplayCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final style = theme.textTheme.headlineSmall!.copyWith(
-      color: theme.colorScheme.onPrimary,
+      color: oldColors ? theme.colorScheme.onPrimary : null,
     );
 
     var splashColorInvert = theme.colorScheme.primary;
 
     return Card(
-      color: theme.colorScheme.primary,
+      color: oldColors ? theme.colorScheme.primary : null,
       child: InkWell(
         onTap: () async {
           var ret = onTap();
