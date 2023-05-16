@@ -56,7 +56,7 @@ class _PhotosPageState extends State<PhotosPage> {
       });
       log("Setup camera");
     }).catchError((err) {
-      log(err);
+      log("$err");
     });
   }
 
