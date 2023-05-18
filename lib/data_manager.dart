@@ -8,6 +8,7 @@ import 'package:flutter/material.dart';
 import 'package:image/image.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:the_purple_alliance/network.dart';
+import 'package:the_purple_alliance/search_system.dart';
 import 'package:the_purple_alliance/util.dart';
 import 'package:the_purple_alliance/widgets.dart';
 import 'package:uuid/uuid.dart';
@@ -63,6 +64,7 @@ mixin TimestampSpecialBehaviorMixin on DataValue {
   bool fromJsonBackup(dynamic data, bool fromDisk);
 }
 
+// cannot be searched
 class TextDataValue extends DataValue {
 
   String _value = "";
@@ -96,7 +98,16 @@ class TextDataValue extends DataValue {
   }
 }
 
-class DropdownDataValue extends DataValue {
+int sum(Iterable<int> nums) {
+  int v = 0;
+  for (int num in nums) {
+    v += num;
+  }
+  return v;
+}
+
+// can be searched
+class DropdownDataValue extends DataValue implements SearchDataEmitter {
   String _value = "";
   late final List<String> _options;
   late final String _default;
@@ -157,9 +168,18 @@ class DropdownDataValue extends DataValue {
       markChange();
     }
   }
+
+  @override
+  int getCurrentPoints(dynamic config) => (config as Map<String, int>)[value] ?? 0;
+
+  @override
+  int getMaxPoints(dynamic config) => (config as Map<String, int>).containsKey(value) ? sum((config as Map<String, int>).values) : 0;
+
+  @override
+  Map<String, int> get defaultConfig => {};
 }
 
-class StarRatingDataValue extends DataValue with TimestampSpecialBehaviorMixin {
+class StarRatingDataValue extends DataValue with TimestampSpecialBehaviorMixin implements SearchDataEmitter {
   double? _personalValue;
   double? get personalValue => _personalValue;
   set personalValue(double? value) {
@@ -209,6 +229,15 @@ class StarRatingDataValue extends DataValue with TimestampSpecialBehaviorMixin {
       "single": single,
     };
   }
+
+  @override
+  int getCurrentPoints(dynamic config) => (getMaxPoints(config) * (averageValue ?? 0) / 5).floor();
+
+  @override
+  int getMaxPoints(dynamic config) => averageValue == null ? 0 : config as int;
+
+  @override
+  int get defaultConfig => 0;
 }
 
 class CommentsDataValue extends DataValue with TimestampSpecialBehaviorMixin {

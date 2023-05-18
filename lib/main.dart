@@ -15,6 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:the_purple_alliance/data_manager.dart';
+import 'package:the_purple_alliance/search_page.dart';
 
 import 'package:the_purple_alliance/widgets.dart';
 import 'package:the_purple_alliance/scouting_layout.dart';
@@ -75,6 +76,23 @@ String? _verifyServerUrl(String url) {
 }
 
 class MyAppState extends ChangeNotifier {
+  Map<String, Map<String, dynamic>> searchConfigurations = {};
+  String? _currentSearchConfiguration;
+
+  String? get currentSearchConfiguration => _currentSearchConfiguration;
+
+  set currentSearchConfiguration(String? currentSearchConfiguration) {
+    _currentSearchConfiguration = currentSearchConfiguration;
+    if (_currentSearchConfiguration != null && searchConfigurations[_currentSearchConfiguration] == null) {
+      searchConfigurations[_currentSearchConfiguration!] = {};
+    }
+  }
+
+  // key : configuration
+  Map<String, dynamic>? get searchValues => currentSearchConfiguration == null
+      ? null
+      : searchConfigurations.putIfAbsent(currentSearchConfiguration!, () => {});
+
   var __unsavedChanges = false;
   bool get _unsavedChanges => __unsavedChanges;
   set _unsavedChanges(bool value) {
@@ -857,6 +875,7 @@ enum Pages {
 //  favorites(Icons.favorite, "Favorites"),
   teamSelection(Icons.list, "Teams"),
   editor(Icons.edit_note, "Editor"),
+  search(Icons.manage_search_outlined, "Search"),
   settings(Icons.settings, "Settings"),
 //  cameraTest(Icons.camera, "Camera Test"),
   ;
@@ -901,6 +920,9 @@ class _MyHomePageState extends State<MyHomePage> {
             selectedIndex = Pages.teamSelection.index;
           });
         }); //experiments
+        break;
+      case Pages.search:
+        page = SearchPage();
         break;
       case Pages.settings:
         page = SettingsPage(); //settings
@@ -951,29 +973,32 @@ class _MyHomePageState extends State<MyHomePage> {
         },
         fabInRail: false,
         navigationBackgroundColor: appState.teamColorReminder ? (appState.teamColorBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
-        floatingActionButton: selectedPage == Pages.settings ? null : (getWindowType(context) >= AdaptiveWindowType.medium ? Row.new : Column.new)(
+        floatingActionButton: selectedPage == Pages.settings || selectedPage == Pages.search ? null : (getWindowType(context) >= AdaptiveWindowType.medium ? Row.new : Column.new)(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
-            FloatingActionButton(
-              heroTag: "runSync",
-              onPressed: appState.runSynchronization,
-              tooltip: "Synchronize data with server",
-              child: const Icon(
-                Icons.sync_alt,
+            if (selectedPage != Pages.search)
+              FloatingActionButton(
+                heroTag: "runSync",
+                onPressed: appState.runSynchronization,
+                tooltip: "Synchronize data with server",
+                child: const Icon(
+                  Icons.sync_alt,
+                ),
               ),
-            ),
-            const SizedBox(width: 10, height: 10),
-            FloatingActionButton(
-              heroTag: "saveData",
-              onPressed: () async {
-                await appState.runSave(manual: true);
-              },
-              tooltip: "Save local data",
-              child: const Icon(
-                Icons.save_outlined,
+            if (selectedPage != Pages.search)
+              const SizedBox(width: 10, height: 10),
+            if (selectedPage != Pages.search)
+              FloatingActionButton(
+                heroTag: "saveData",
+                onPressed: () async {
+                  await appState.runSave(manual: true);
+                },
+                tooltip: "Save local data",
+                child: const Icon(
+                  Icons.save_outlined,
+                ),
               ),
-            ),
           ],
         ),
       ),

@@ -31,6 +31,10 @@ class Pair<A, B> {
   }
 }
 
+class Couple<T> extends Pair<T, T> {
+  Couple.of(super.first, super.second) : super.of();
+}
+
 class Triple<A, B, C> {
   late final A _first;
   A get first => _first;
@@ -52,4 +56,14 @@ T typeOr<T>(dynamic val, T default_) {
 
 bool isCameraSupported() {
   return Platform.isIOS || Platform.isAndroid || kIsWeb;
+}
+
+extension MapExtension<K, V> on Map<K, V> {
+  void put(K key, V value) {
+    this[key] = value;
+  }
+
+  V? get(K key) {
+    return this[key];
+  }
 }

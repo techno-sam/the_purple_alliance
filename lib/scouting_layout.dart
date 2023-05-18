@@ -3,12 +3,17 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
+import 'package:the_purple_alliance/util.dart';
+import 'package:the_purple_alliance/search_system.dart';
 import 'package:the_purple_alliance/widgets.dart';
 import 'package:the_purple_alliance/data_manager.dart';
 
 abstract class JsonWidgetBuilder {
   JsonWidgetBuilder.fromJson(Map<String, dynamic> schemeData);
   Widget build(BuildContext context);
+  Widget buildSearchEditor(BuildContext context);
+  IconData get icon;
+  String get label;
 }
 
 enum TextType {
@@ -64,6 +69,17 @@ class TextWidgetBuilder extends JsonWidgetBuilder {
       child: child,
     );
   }
+
+  @override
+  Widget buildSearchEditor(BuildContext context) {
+    return const SizedBox();
+  }
+
+  @override
+  IconData get icon => Icons.text_fields;
+
+  @override
+  String get label => _label;
 }
 
 abstract class SynchronizedBuilder<T extends DataValue> extends JsonWidgetBuilder {
@@ -78,6 +94,7 @@ abstract class SynchronizedBuilder<T extends DataValue> extends JsonWidgetBuilde
   }
 
   late final String _key;
+  String get key => _key;
   late final Map<String, dynamic> _initData;
   SynchronizedBuilder.fromJson(Map<String, dynamic> schemeData) : super.fromJson(schemeData) {
     _key = schemeData["key"];
@@ -145,6 +162,14 @@ class TextFieldWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<TextDat
       ),
     );
   }
+
+  @override
+  Widget buildSearchEditor(BuildContext context) {
+    return const SizedBox();
+  }
+
+  @override
+  IconData get icon => Icons.short_text;
 }
 
 class DropdownWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<DropdownDataValue> {
@@ -155,6 +180,84 @@ class DropdownWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<Dropdown
     final theme = Theme.of(context);
     return DropdownWithOther(key: Key("${_key}_outer"), padding: _padding, formKey: _key, label: _label, dataValue: _dataValue, theme: theme);
   }
+
+  @override
+  Widget buildSearchEditor(BuildContext context) { //fixme todo
+    return ElevatedButton.icon(
+      onPressed: () {
+        showDialog(
+          context: context, builder: (context) {
+            var appState = context.watch<MyAppState>();
+            final theme = Theme.of(context);
+            return Form(
+              autovalidateMode: AutovalidateMode.onUserInteraction,
+              key: Key("$_key search"),
+              child: SimpleDialog(
+                title: Text("Configuring '$_label'"),
+                children: [
+                  const SizedBox(width: 400),
+                  for (String option in _dataValue?.options ?? [])
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 4.0),
+                      child: Row(
+                        children: [
+                          Text(option),
+                          const Spacer(),
+                          SizedBox(
+                            width: 150,
+                            child: TextFormField(
+                              key: Key("$_key search points $option"),
+                              keyboardType: TextInputType.number,
+                              decoration: InputDecoration(
+                                border: const OutlineInputBorder(),
+                                hintText: "Ignored",
+                                labelStyle: TextStyle(
+                                  color: theme.colorScheme.onPrimaryContainer,
+                                ),
+                              ),
+                              validator: (v) {
+                                if (v == null || v == "") {
+                                  return null;
+                                }
+                                if (int.tryParse(v) == null) {
+                                  return "Must be a number";
+                                }
+                              },
+                              onChanged: (v) {
+                                //print("changed to `$v`");
+                                int? vInt = int.tryParse(v);
+                                if (appState.searchValues != null && appState.searchValues![_key] is! Map<String, int>) {
+                                  //print("wrong type: ${appState.searchValues[_key]}");
+                                  appState.searchValues![_key] = {};
+                                }
+                                if (vInt != null) {
+                                  //print("vInt: $vInt");
+                                  appState.searchValues?[_key][option] = vInt;
+                                } else {
+                                  //print("null, removing");
+                                  //print("before: ${appState.searchValues[_key]}");
+                                  appState.searchValues?[_key].remove(option);
+                                  //print("now: ${appState.searchValues[_key]}");
+                                }
+                              },
+                              initialValue: "${(appState.searchValues?[_key] is Map<String, int>) ? (appState.searchValues?[_key][option] ?? "") : ""}",
+                            ),
+                          ),
+                        ],
+                      )
+                    ),
+                ],
+              ),
+            );
+        });
+      },
+      icon: const Icon(Icons.settings),
+      label: const Text("Configure")
+    );
+  }
+
+  @override
+  IconData get icon => Icons.arrow_drop_down_circle_outlined;
 }
 
 class DropdownWithOther extends StatefulWidget {
@@ -303,6 +406,51 @@ class StarRatingWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<StarRa
       ),
     );
   }
+
+  @override
+  Widget buildSearchEditor(BuildContext context) { // fixme todo
+    final theme = Theme.of(context);
+    var appState = context.watch<MyAppState>();
+    return Form(
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      key: Key("$_key search"),
+      child: SizedBox(
+        width: 200,
+        child: TextFormField(
+          key: Key("$_key search text"),
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            border: const UnderlineInputBorder(),
+            labelText: "Point Value",
+            labelStyle: TextStyle(
+              color: theme.colorScheme.onPrimaryContainer,
+            ),
+          ),
+          validator: (v) {
+            if (v == null || v == "") {
+              return null;
+            }
+            if (int.tryParse(v) == null) {
+              return "Must be a number";
+            }
+          },
+          onChanged: (v) {
+            if (v == "") {
+              v = "0";
+            }
+            int? vInt = int.tryParse(v);
+            if (vInt != null) {
+              appState.searchValues?[_key] = vInt;
+            }
+          },
+          initialValue: "${appState.searchValues?[_key] ?? 0}",
+        ),
+      ),
+    );
+  }
+
+  @override
+  IconData get icon => Icons.star_border;
 }
 
 class CommentsWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<CommentsDataValue> {
@@ -376,6 +524,14 @@ class CommentsWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<Comments
       ),
     );
   }
+
+  @override
+  Widget buildSearchEditor(BuildContext context) {
+    return const SizedBox();
+  }
+
+  @override
+  IconData get icon => Icons.comment_outlined;
 }
 
 class PhotosBuilder extends JsonWidgetBuilder {
@@ -445,6 +601,17 @@ class PhotosBuilder extends JsonWidgetBuilder {
       ),
     );
   }
+
+  @override
+  Widget buildSearchEditor(BuildContext context) {
+    return const SizedBox();
+  }
+
+  @override
+  IconData get icon => Icons.photo_camera_back_outlined;
+
+  @override
+  String get label => _label;
 }
 
 Map<String, JsonWidgetBuilder Function(Map<String, dynamic>)> widgetBuilders = {};
@@ -485,6 +652,7 @@ JsonWidgetBuilder? loadBuilder(Map<String, dynamic> entry) {
 class ExperimentBuilder {
 
   final List<JsonWidgetBuilder> _builders = [];
+  final Map<String, JsonWidgetBuilder> _builderMap = {};
   late final TeamDataManager teamManager;
   DataManager? _manager;
 
@@ -493,6 +661,31 @@ class ExperimentBuilder {
   int? _currentTeam;
 
   int? get currentTeam => _currentTeam;
+
+  List<SynchronizedBuilder> getAllSearchableBuilders() {
+    return _builders.whereType<SynchronizedBuilder>().where((element) => element._dataValue is SearchDataEmitter).toList();
+  }
+
+  DataValue? getSearchableDataValue(String key) {
+    var builder = _builderMap[key];
+    if (builder is SynchronizedBuilder && builder._dataValue is SearchDataEmitter) {
+      return builder._dataValue;
+    }
+    return null;
+  }
+
+  SearchDataEmitter? getSearchableValue(String key) {
+    var builder = _builderMap[key];
+    if (builder is SynchronizedBuilder && builder._dataValue is SearchDataEmitter) {
+      return builder._dataValue as SearchDataEmitter;
+    }
+    return null;
+  }
+
+  T? getBuilder<T extends JsonWidgetBuilder>(String key) {
+    var builder = _builderMap[key];
+    return builder is T ? builder : null;
+  }
 
   ExperimentBuilder.fromJson(List<dynamic> data) {
     teamManager = TeamDataManager((m) {
@@ -506,6 +699,9 @@ class ExperimentBuilder {
       var builder = loadBuilder(entry);
       if (builder != null) {
         _builders.add(builder);
+        if (entry["key"] is String) {
+          _builderMap[entry["key"]] = builder;
+        }
 //          if (builder is SynchronizedBuilder) {
 //            builder.setDataManager(manager);
 //          }
