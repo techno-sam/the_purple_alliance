@@ -452,6 +452,17 @@ class TeamDataManager {
     }
     return data;
   }
+
+  String getTeamName(int team) {
+    DataManager? manager = managers[team];
+    if (manager != null) {
+      var name = manager.values["name"];
+      if (name is TextDataValue) {
+        return name.value;
+      }
+    }
+    return "Unknown Team";
+  }
 }
 
 class ImageRecord {
