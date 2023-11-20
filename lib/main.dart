@@ -14,13 +14,13 @@ import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:the_purple_alliance/data_manager.dart';
-import 'package:the_purple_alliance/search_page.dart';
+import 'package:the_purple_alliance/state/data_manager.dart';
+import 'package:the_purple_alliance/screens/main_pages/search_page.dart';
 
-import 'package:the_purple_alliance/widgets.dart';
-import 'package:the_purple_alliance/scouting_layout.dart';
-import 'package:the_purple_alliance/network.dart' as network;
-import 'package:the_purple_alliance/util.dart';
+import 'package:the_purple_alliance/widgets/widgets.dart';
+import 'package:the_purple_alliance/widgets/scouting_elements/scouting_layout.dart';
+import 'package:the_purple_alliance/state/network.dart' as network;
+import 'package:the_purple_alliance/utils/util.dart';
 
 
 void main() {

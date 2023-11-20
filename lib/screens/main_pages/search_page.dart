@@ -1,11 +1,11 @@
 import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:the_purple_alliance/data_manager.dart';
-import 'package:the_purple_alliance/scouting_layout.dart';
-import 'package:the_purple_alliance/search_system.dart';
+import 'package:the_purple_alliance/state/data_manager.dart';
+import 'package:the_purple_alliance/widgets/scouting_elements/scouting_layout.dart';
+import 'package:the_purple_alliance/state/search_system.dart';
 
-import 'main.dart';
+import '../../main.dart';
 
 /*
 Search and ranking system works as a total points system

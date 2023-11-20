@@ -1,4 +1,4 @@
-import 'package:the_purple_alliance/util.dart';
+import 'package:the_purple_alliance/utils/util.dart';
 
 import 'data_manager.dart';
 

@@ -9,10 +9,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
 import 'package:camera/camera.dart';
-import 'package:the_purple_alliance/util.dart';
+import 'package:the_purple_alliance/utils/util.dart';
 import 'package:file_picker/file_picker.dart';
 
-import 'data_manager.dart';
+import '../state/data_manager.dart';
 
 const Set<PointerDeviceKind> _extendedScrollableTypes = <PointerDeviceKind>{
   PointerDeviceKind.touch,

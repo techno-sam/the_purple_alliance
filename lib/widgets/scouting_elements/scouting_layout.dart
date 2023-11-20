@@ -3,10 +3,10 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
-import 'package:the_purple_alliance/util.dart';
-import 'package:the_purple_alliance/search_system.dart';
-import 'package:the_purple_alliance/widgets.dart';
-import 'package:the_purple_alliance/data_manager.dart';
+import 'package:the_purple_alliance/utils/util.dart';
+import 'package:the_purple_alliance/state/search_system.dart';
+import 'package:the_purple_alliance/widgets/widgets.dart';
+import 'package:the_purple_alliance/state/data_manager.dart';
 
 abstract class JsonWidgetBuilder {
   JsonWidgetBuilder.fromJson(Map<String, dynamic> schemeData);

@@ -7,10 +7,10 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:image/image.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:the_purple_alliance/network.dart';
-import 'package:the_purple_alliance/search_system.dart';
-import 'package:the_purple_alliance/util.dart';
-import 'package:the_purple_alliance/widgets.dart';
+import 'package:the_purple_alliance/state/network.dart';
+import 'package:the_purple_alliance/state/search_system.dart';
+import 'package:the_purple_alliance/utils/util.dart';
+import 'package:the_purple_alliance/widgets/widgets.dart';
 import 'package:uuid/uuid.dart';
 
 final Map<Type, DataValue Function(Map<String, dynamic>)> _valueTypes = {};
