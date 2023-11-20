@@ -1499,7 +1499,7 @@ class SettingsPage extends StatelessWidget {
                                         centerTitle: true,
                                       ),
                                       body: Center(
-                                        child: QrImage(
+                                        child: QrImageView(
                                           data: jsonEncode({
                                             "identifier": identifier,
                                             "team_number": appState.getDisplayTeamNumber(),

@@ -55,7 +55,7 @@ dependencies:
 
 dependency_overrides:
   http_auth: # TODO switch to using git
-    path: ../http_auth/
+    git: https://github.com/techno-sam/http_auth
 
 dev_dependencies:
   flutter_test:

@@ -1,5 +1,3 @@
-import 'dart:developer';
-
 import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,6 +5,10 @@ import 'package:the_purple_alliance/scouting_layout.dart';
 import 'package:the_purple_alliance/search_system.dart';
 
 import 'main.dart';
+
+/*
+TODO: Add an option to delete a team from the rankings if they are already picked
+*/
 
 /*
 Search and ranking system works as a total points system
