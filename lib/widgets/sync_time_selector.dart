@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:the_purple_alliance/main.dart';
+import 'package:the_purple_alliance/state/meta/config_state.dart';
 
 enum SyncInterval {
   t_1(description: "1 minute", interval: 1),
@@ -28,7 +28,7 @@ class SyncTimeSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     var dropdownTextColor = theme.colorScheme.onPrimaryContainer;
-    var appState = context.watch<MyAppState>();
+    var config = context.watch<ConfigState>();
     TextStyle style = TextStyle(
       color: dropdownTextColor,
     );
@@ -54,13 +54,13 @@ class SyncTimeSelector extends StatelessWidget {
       ],
       onChanged: (value) {
         if (value is SyncInterval) {
-          appState.syncInterval = value;
+          config.syncInterval = value;
         } else {
-          appState.syncInterval = SyncInterval.manual;
+          config.syncInterval = SyncInterval.manual;
         }
       },
       dropdownColor: theme.colorScheme.primaryContainer,
-      value: appState.syncInterval,
+      value: config.syncInterval,
     );
   }
 }

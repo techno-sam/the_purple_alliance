@@ -11,12 +11,10 @@ import 'package:path_provider/path_provider.dart';
 
 import 'package:the_purple_alliance/screens/main/main_page.dart';
 import 'package:the_purple_alliance/state/images/image_sync_manager.dart';
-import 'package:the_purple_alliance/widgets/image_sync_selector.dart';
+import 'package:the_purple_alliance/state/meta/config_state.dart';
 import 'package:the_purple_alliance/widgets/scouting/scouting_layout.dart';
 import 'package:the_purple_alliance/state/network.dart' as network;
 import 'package:the_purple_alliance/utils/util.dart';
-import 'package:the_purple_alliance/widgets/sync_time_selector.dart';
-import 'package:the_purple_alliance/widgets/unsaved_changes_bar.dart';
 
 
 
@@ -44,16 +42,19 @@ class MyApp extends StatelessWidget {
         create: (context) => MyAppState(_scaffoldKey, _mainPageKey),
         child: ChangeNotifierProvider(
           create: (context) => Provider.of<MyAppState>(context, listen: false).imageSyncManager,
-          child: MaterialApp(
-            scaffoldMessengerKey: _scaffoldKey,
-            title: 'The Purple Alliance',
-            theme: ThemeData(
-              useMaterial3: true,
-              colorScheme: ColorScheme.fromSeed(
-                seedColor: Colors.purple,
+          child: ChangeNotifierProvider(
+            create: (context) => Provider.of<MyAppState>(context, listen: false).config,
+            child: MaterialApp(
+              scaffoldMessengerKey: _scaffoldKey,
+              title: 'The Purple Alliance',
+              theme: ThemeData(
+                useMaterial3: true,
+                colorScheme: ColorScheme.fromSeed(
+                  seedColor: Colors.purple,
+                ),
               ),
+              home: MainPage(key: _mainPageKey),
             ),
-            home: MainPage(key: _mainPageKey),
           ),
         )
     );
@@ -61,38 +62,34 @@ class MyApp extends StatelessWidget {
 }
 
 
-Future<String> get _localPath async {
+Future<String> get localPath async {
   final directory = await getApplicationDocumentsDirectory();
 
   return "${directory.path}/the_purple_alliance";
 }
 
-Future<File> get _configFile async {
-  final path = await _localPath;
-  await Directory(path).create(recursive: true);
-  return File('$path/config.json');
-}
+
 
 Future<File> get _searchFile async {
-  final path = await _localPath;
+  final path = await localPath;
   await Directory(path).create(recursive: true);
   return File('$path/search.json');
 }
 
 Future<File> get _dataFile async {
-  final path = await _localPath;
+  final path = await localPath;
   await Directory(path).create(recursive: true);
   return File('$path/data.json');
 }
 
 Future<File> get _schemeFile async {
-  final path = await _localPath;
+  final path = await localPath;
   await Directory(path).create(recursive: true);
   return File('$path/scheme.json');
 }
 
 Future<File> get _cachedServerMetaFile async {
-  final path = await _localPath;
+  final path = await localPath;
   await Directory(path).create(recursive: true);
   return File('$path/server_meta.json');
 }
@@ -128,20 +125,6 @@ Future<File?> writeJsonFile(FutureOr<File> file, Object? data) async {
     log('Error in writeJsonFile: $e');
     return Future.value(file);
   }
-}
-
-Future<Map<String, dynamic>> readConfig() async {
-  log("reading config...");
-  var config = await readJsonFile(_configFile);
-  if (config is Map<String, dynamic>) {
-    return config;
-  } else {
-    return {};
-  }
-}
-
-Future<File?> writeConfig(Map<String, dynamic> data) async {
-  return await compute2(writeJsonFile, await _configFile, data);
 }
 
 Future<Map<String, Map<String, dynamic>>?> get _previousSearchConfigurations async {
@@ -222,210 +205,21 @@ class MyAppState extends ChangeNotifier {
       ? null
       : searchConfigurations.putIfAbsent(currentSearchConfiguration!, () => {});
 
-  var __unsavedChanges = false;
-  bool get unsavedChanges => __unsavedChanges;
-  set unsavedChanges(bool value) {
-    if (__unsavedChanges != value) {
-      __unsavedChanges = value;
-      if ((unsavedChangesBarState?.target?.unsavedChanges ?? value) != value) {
-        unsavedChangesBarState?.target?.setUnsavedChanges(value);
-      }
-    }
-  }
-
-  WeakReference<UnsavedChangesBarState>? unsavedChangesBarState;
-
   bool gridMode = true;
+
+  final Object _configPrivateKey = Object();
+  late final ImageSyncManager imageSyncManager = ImageSyncManager(() => httpClient, () => config.imageSyncMode, () => builder?.currentTeam, () => config.locked);
+  late final ConfigState config = ConfigState(reconnectCallback: () async {
+    await connect(reconnecting: true);
+  }, privateKey: _configPrivateKey);
   
-  late final ImageSyncManager imageSyncManager = ImageSyncManager(() => httpClient, () => imageSyncMode, () => builder?.currentTeam, () => locked);
-
-  Future<File?> saveConfig() async {
-    return await writeConfig(_config).then(
-        (v) {
-          unsavedChanges = false;
-          return v;
-        }
-    );
-  }
-
-  Map<String, dynamic> get _config {
-    _localPath.then((v) {
-      log(v);
-    });
-    return {
-      "colorful_teams": colorfulTeams,
-      "team_color_reminder": teamColorReminder,
-      "team_color_blue": teamColorBlue,
-      "sync_interval": syncInterval.name,
-      "image_sync_mode": imageSyncMode.name,
-      "connection": {
-        "locked": locked,
-        "team_number": locked ? _teamNumber ?? teamNumberInProgress : teamNumberInProgress,
-        "url": locked ? serverUrl ?? serverUrlInProgress : serverUrlInProgress,
-        "username": username,
-        "password": __password,
-      },
-    };
-  }
-
-  _setConfig(Map<String, dynamic> jsonData) async {
-    log("Hello");
-    if (jsonData["colorful_teams"] is bool) {
-      log("Reading colorful teams ${jsonData["colorful_teams"]}");
-      colorfulTeams = jsonData["colorful_teams"];
-    }
-    if (jsonData["team_color_reminder"] is bool) {
-      teamColorReminder = jsonData["team_color_reminder"];
-    }
-    if (jsonData["team_color_blue"] is bool) {
-      teamColorBlue = jsonData["team_color_blue"];
-    }
-    if (jsonData["sync_interval"] is String) {
-      syncInterval = SyncInterval.fromName(jsonData["sync_interval"]);
-    }
-    if (jsonData["image_sync_mode"] is String) {
-      imageSyncMode = ImageSyncMode.fromName(jsonData["image_sync_mode"]);
-    }
-    if (jsonData["connection"] is Map) {
-      var connection = jsonData["connection"];
-      var shouldConnect = false;
-      if (connection["locked"] is bool) {
-        shouldConnect = connection["locked"];
-      }
-      if (connection["team_number"] is int) {
-        teamNumberInProgress = connection["team_number"];
-      } else {
-        shouldConnect = false;
-      }
-      if (connection["url"] is String) {
-        serverUrlInProgress = connection["url"];
-      } else {
-        shouldConnect = false;
-      }
-      if (connection["username"] is String) {
-        username = connection["username"];
-      }
-      if (connection["password"] is String) {
-        __password = connection["password"];
-      }
-      if (shouldConnect) {
-        locked = false;
-        log("Awaiting connection...");
-        notifyListeners();
-        await connect(reconnecting: true);
-        log("Connected...");
-      }
-    }
-    notifyListeners();
-    unsavedChanges = false;
-  }
-
-  var locked = false;
-  var __teamNumberInProgress = 1234;
-  int get teamNumberInProgress => __teamNumberInProgress;
-  set teamNumberInProgress(int value) {
-    unsavedChanges = true;
-    __teamNumberInProgress = value;
-  }
-  var __serverUrlInProgress = "example.com";
-  String get serverUrlInProgress => __serverUrlInProgress;
-  set serverUrlInProgress(String value) {
-    unsavedChanges = true;
-    __serverUrlInProgress = value;
-  }
-  int? _teamNumber;
-  String? serverUrl;
   ScoutingBuilder? builder;
 
-  String? _error;
-
-  String _username = "";
-  String get username => _username;
-  set username(String value) {
-    unsavedChanges = true;
-    _username = value;
-  }
-
-  String __password = "";
-  String get password => __password;
-  set password(String value) {
-    if (locked) {
-      log("Attempted password set while locked!");
-      return;
-    }
-    unsavedChanges = true;
-    __password = value;
-  }
 
   void notifySettingsUpdate() {
-    notifyListeners();
+    config.notifyListeners();
   }
-
-  SyncInterval _syncInterval = SyncInterval.manual;
-  SyncInterval get syncInterval => _syncInterval;
-  set syncInterval(SyncInterval value) {
-    unsavedChanges = true;
-    _syncInterval = value;
-  }
-
-  ImageSyncMode _imageSyncMode = ImageSyncMode.manual;
-  ImageSyncMode get imageSyncMode => _imageSyncMode;
-  set imageSyncMode(ImageSyncMode value) {
-    unsavedChanges = true;
-    _imageSyncMode = value;
-  }
-
-  bool _colorfulTeams = true;
-
-  bool get colorfulTeams => _colorfulTeams;
-
-  set colorfulTeams(bool value) {
-    _colorfulTeams = value;
-    notifyListeners();
-    unsavedChanges = true;
-  }
-
-  bool _teamColorReminder = false;
-
-  bool get teamColorReminder => _teamColorReminder;
-
-  set teamColorReminder(bool value) {
-    _teamColorReminder = value;
-    notifyListeners();
-    unsavedChanges = true;
-  }
-
-  bool _teamColorBlue = false; // whether the team color reminder is blue or red
-
-  bool get teamColorBlue => _teamColorBlue;
-
-  set teamColorBlue(bool value) {
-    _teamColorBlue = value;
-    notifyListeners();
-    unsavedChanges = true;
-  }
-
-  bool _setTeamNumber(int teamNumber) {
-    if (!locked) {
-      _teamNumber = teamNumber;
-      notifyListeners();
-    }
-    return true;
-  }
-
-  bool _setServer(String url) {
-    if (!locked) {
-      serverUrl = url;
-      var error = verifyServerUrl(url);
-      if (error != null) {
-        _error = error;
-        serverUrl = null;
-        return false;
-      }
-      notifyListeners();
-    }
-    return true;
-  }
+  
   
   Future<Map<String, dynamic>> getServerMeta() async {
     return await compute(network.getServerMeta, httpClient);
@@ -437,14 +231,14 @@ class MyAppState extends ChangeNotifier {
   }
 
   network.Connection get httpClient {
-    return network.Connection(serverUrl ?? "https://example.com", username, password);
+    return network.Connection(config.serverUrl ?? "https://example.com", config.username, config.password);
   }
 
   bool checkedCompetition = false; // keep track of whether we've checked what competition we are at yet. if we haven't checked yet, we don't want to send bad data.
   bool _currentlyChecking = false;
 
   Future<bool> checkCompetition() async {
-    if (!locked) {
+    if (!config.locked) {
       return false;
     }
     if (checkedCompetition) {
@@ -491,19 +285,18 @@ class MyAppState extends ChangeNotifier {
   }
 
   Future<void> connect({bool reconnecting = false}) async {
-    bool success1 = _setTeamNumber(teamNumberInProgress);
-    bool success2 = _setServer(serverUrlInProgress);
+    bool success1 = config.setTeamNumber(config.teamNumberInProgress, _configPrivateKey);
+    bool success2 = config.setServer(config.serverUrlInProgress, _configPrivateKey);
     if (success1 && success2) {
-      locked = true;
-      log("Connecting with team_number: $_teamNumber, url: $serverUrl");
+      config.locked = true;
+      log("Connecting with team_number: ${config.teamNumber}, url: ${config.serverUrl}");
     } else {
-      log("Failed to connect ($_error)");
-      _teamNumber = null;
-      serverUrl = null;
+      log("Failed to connect (${config.error})");
+      config.setConnectionFailed(_configPrivateKey);
       notifyListeners();
       return;
     }
-    bool serverFound = await compute(network.testUnauthorizedConnection, serverUrl ?? "https://example.com");
+    bool serverFound = await compute(network.testUnauthorizedConnection, config.serverUrl ?? "https://example.com");
     if (!reconnecting) { // first time we connect, ensure we have a proper connection
       bool serverAuthorized = await compute(network.testAuthorizedConnection, httpClient);
       if (serverFound && serverAuthorized) {
@@ -516,9 +309,8 @@ class MyAppState extends ChangeNotifier {
         scaffoldKey.currentState?.showSnackBar(const SnackBar(
           content: Text("Invalid credentials"),
         ));
-        locked = false;
-        _teamNumber = null;
-        serverUrl = null;
+        config.locked = false;
+        config.setConnectionFailed(_configPrivateKey);
         notifyListeners();
         return;
       } else {
@@ -526,9 +318,8 @@ class MyAppState extends ChangeNotifier {
         scaffoldKey.currentState?.showSnackBar(const SnackBar(
           content: Text("Server not found"),
         ));
-        locked = false;
-        _teamNumber = null;
-        serverUrl = null;
+        config.locked = false;
+        config.setConnectionFailed(_configPrivateKey);
         notifyListeners();
         return;
       }
@@ -539,14 +330,13 @@ class MyAppState extends ChangeNotifier {
     Map<String, dynamic>? remoteServerMeta;
     if (serverFound) {
       remoteServerMeta = await getServerMeta();
-      int myTeamNumber = _teamNumber ?? teamNumberInProgress;
+      int myTeamNumber = config.getDisplayTeamNumber();
       var remoteTeamNumber = remoteServerMeta.containsKey("team") ? remoteServerMeta["team"] : null;
       if (remoteTeamNumber != myTeamNumber || remoteTeamNumber == null) {
         remoteServerMeta = null;
         serverFound = false;
-        locked = false;
-        _teamNumber = null;
-        serverUrl = null;
+        config.locked = false;
+        config.setConnectionFailed(_configPrivateKey);
         notifyListeners();
         log("Remote team $remoteTeamNumber does not match $myTeamNumber");
         scaffoldKey.currentState?.clearSnackBars();
@@ -555,7 +345,7 @@ class MyAppState extends ChangeNotifier {
           action: remoteTeamNumber is int ? SnackBarAction(
             label: "Set",
             onPressed: () {
-              teamNumberInProgress = remoteTeamNumber;
+              config.teamNumberInProgress = remoteTeamNumber;
               notifyListeners();
             }
           ) : null,
@@ -622,7 +412,7 @@ class MyAppState extends ChangeNotifier {
       await _setCachedServerMeta(remoteServerMeta);
     }
     if (!reconnecting) {
-      await saveConfig();
+      await config.saveConfig();
     }
     _startCompetitionCheckTimer();
     await runSynchronization();
@@ -630,33 +420,25 @@ class MyAppState extends ChangeNotifier {
   }
 
   Future<void> unlock() async {
-    teamNumberInProgress = _teamNumber ?? 1234;
-    serverUrlInProgress = serverUrl ?? "example.com";
+    config.teamNumberInProgress = config.teamNumber ?? 1234;
+    config.serverUrlInProgress = config.serverUrl ?? "example.com";
     Future<File?> future = _setPreviousData(builder?.allManagers.save())
         .then((_) async => await imageSyncManager.save())
         .then((_) async => await _setPreviousSearchConfigurations(searchConfigurations));
     builder = null;
     await future.then((_) {
-      locked = false;
+      config.locked = false;
       notifyListeners();
     });
-    await saveConfig();
+    await config.saveConfig();
     checkTimer?.cancel();
   }
 
   Future<void> reconnect() async {
-    if (locked) {
+    if (config.locked) {
       await unlock();
       await connect(reconnecting: true);
     }
-  }
-
-  int getDisplayTeamNumber() {
-    return _teamNumber ?? teamNumberInProgress;
-  }
-
-  String getDisplayUrl() {
-    return serverUrl ?? serverUrlInProgress;
   }
 
   int _minutesSinceLastSync = 0;
@@ -821,16 +603,14 @@ class MyAppState extends ChangeNotifier {
     _noSync = true;
     asyncTimer = Timer.periodic(const Duration(minutes: 1), (timer) async {
       _minutesSinceLastSync++;
-      if (!_noSync && _minutesSinceLastSync >= (_syncInterval.interval ?? _minutesSinceLastSync+1)) { //if the interval is null, it will not sync
+      if (!_noSync && _minutesSinceLastSync >= (config.syncInterval.interval ?? _minutesSinceLastSync+1)) { //if the interval is null, it will not sync
         await runSynchronization();
       }
     });
     autoSaveTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       await runSave();
     });
-    readConfig().then((v) async {
-      log("Read config: $v");
-      await _setConfig(v);
+    config.readConfig(_configPrivateKey).then((_) async {
       imageSyncManager.load();
       log("Set.");
       _noSync = false;

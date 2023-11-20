@@ -8,6 +8,7 @@ import 'package:the_purple_alliance/screens/main/scouting_page.dart';
 import 'package:the_purple_alliance/screens/main/search_page.dart';
 import 'package:the_purple_alliance/screens/main/settings_page.dart';
 import 'package:the_purple_alliance/screens/main/team_selection.dart';
+import 'package:the_purple_alliance/state/meta/config_state.dart';
 
 enum Pages {
   teamSelection(Icons.list, "Teams"),
@@ -34,6 +35,7 @@ class _MainPageState extends State<MainPage> {
   @override
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
+    var config = context.watch<ConfigState>();
     Widget page;
     Pages selectedPage = Pages.values[selectedIndex];
     switch (selectedPage) {
@@ -73,21 +75,21 @@ class _MainPageState extends State<MainPage> {
         destinations: [
           for (Pages page in Pages.values)
             AdaptiveScaffoldDestination(title: page.title, icon: page.icon),
-          if (appState.teamColorReminder)
+          if (config.teamColorReminder)
             const AdaptiveScaffoldDestination(title: 'Switch Color', icon: Icons.invert_colors),
         ],
         selectedIndex: selectedIndex,
         onDestinationSelected: (value) async {
           if (value == Pages.values.length) { // last item isn't actually a page, but a selector
-            appState.teamColorBlue = !appState.teamColorBlue;
-            await appState.saveConfig();
+            config.teamColorIsBlue = !config.teamColorIsBlue;
+            await config.saveConfig();
           } else {
             setState(() {
-              if (!appState.locked || appState.builder == null) {
+              if (!config.locked || appState.builder == null) {
                 value = Pages.settings.index;
               }
-              if (selectedIndex != value && selectedIndex == Pages.settings.index && appState.unsavedChanges) { //if we're leaving the settings page, save the config
-                appState.saveConfig().then((_) {
+              if (selectedIndex != value && selectedIndex == Pages.settings.index && config.unsavedChanges) { //if we're leaving the settings page, save the config
+                config.saveConfig().then((_) {
                   setState(() {
                     selectedIndex = value;
                   });
@@ -99,7 +101,7 @@ class _MainPageState extends State<MainPage> {
           }
         },
         fabInRail: false,
-        navigationBackgroundColor: appState.teamColorReminder ? (appState.teamColorBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
+        navigationBackgroundColor: config.teamColorReminder ? (config.teamColorIsBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
         floatingActionButton: selectedPage == Pages.settings ? null : (getWindowType(context) >= AdaptiveWindowType.medium ? Row.new : Column.new)(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.end,

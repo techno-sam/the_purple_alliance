@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:the_purple_alliance/main.dart';
+import 'package:the_purple_alliance/state/meta/config_state.dart';
 
 enum ImageSyncMode {
   all(description: "All Images", icon: Icons.cloud_sync),
@@ -26,7 +26,7 @@ class ImageSyncSelector extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     var dropdownTextColor = theme.colorScheme.onPrimaryContainer;
-    var appState = context.watch<MyAppState>();
+    var config = context.watch<ConfigState>();
     TextStyle style = TextStyle(
       color: dropdownTextColor,
     );
@@ -52,13 +52,13 @@ class ImageSyncSelector extends StatelessWidget {
       ],
       onChanged: (value) {
         if (value is ImageSyncMode) {
-          appState.imageSyncMode = value;
+          config.imageSyncMode = value;
         } else {
-          appState.imageSyncMode = ImageSyncMode.manual;
+          config.imageSyncMode = ImageSyncMode.manual;
         }
       },
       dropdownColor: theme.colorScheme.primaryContainer,
-      value: appState.imageSyncMode,
+      value: config.imageSyncMode,
     );
   }
 }

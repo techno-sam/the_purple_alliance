@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
-import 'package:the_purple_alliance/main.dart';
+import 'package:the_purple_alliance/state/meta/config_state.dart';
 
 class SimplePasswordFormField extends StatefulWidget {
   const SimplePasswordFormField({
     super.key,
     required this.genericTextStyle,
-    required this.appState,
+    required this.config,
     this.formKey,
   });
 
   final TextStyle genericTextStyle;
-  final MyAppState appState;
+  final ConfigState config;
   final Key? formKey;
 
   @override
@@ -42,15 +42,15 @@ class _SimplePasswordFormFieldState extends State<SimplePasswordFormField> {
           },
         ),
       ),
-      controller: TextEditingController(text: widget.appState.password),
+      controller: TextEditingController(text: widget.config.password),
       obscureText: !passwordVisible,
       enableIMEPersonalizedLearning: false,
       enableSuggestions: false,
       keyboardType: TextInputType.visiblePassword,
-      readOnly: widget.appState.locked,
+      readOnly: widget.config.locked,
 //      initialValue: widget.appState._password,
       onChanged: (value) {
-        widget.appState.password = value;
+        widget.config.password = value;
       },
       validator: (String? value) {
         if (value == null || value == "") {

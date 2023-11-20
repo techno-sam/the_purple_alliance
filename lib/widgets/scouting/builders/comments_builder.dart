@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
 import 'package:the_purple_alliance/screens/main/scouting_sub/comments_list_page.dart';
 import 'package:the_purple_alliance/state/data_values/comments.dart';
+import 'package:the_purple_alliance/state/meta/config_state.dart';
 
 import 'abstract_synchronized_builder.dart';
 
@@ -15,7 +16,9 @@ class CommentsWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<Comments
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    var appState = context.watch<MyAppState>();
+    // ignore: unused_local_variable
+    var appState = context.watch<MyAppState>(); // keep this here for now until individual change notification is implemented
+    var config = context.watch<ConfigState>();
     var heroTag = "comment_title_$label:$key";
     _controller.text = dataValue?.personalComment ?? CommentsDataValue.getDefault();
     return Padding(
@@ -44,7 +47,7 @@ class CommentsWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<Comments
                                   body: Center(
                                     child: CommentList(
                                       theme: theme,
-                                      comments: (dataValue?.stringComments ?? {})..[appState.username] = dataValue?.personalComment ?? "",
+                                      comments: (dataValue?.stringComments ?? {})..[config.username] = dataValue?.personalComment ?? "",
                                     ),
                                   ),
                                 );

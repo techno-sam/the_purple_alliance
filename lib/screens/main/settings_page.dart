@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 import 'package:the_purple_alliance/main.dart';
+import 'package:the_purple_alliance/state/meta/config_state.dart';
 import 'package:the_purple_alliance/utils/util.dart';
 import 'package:the_purple_alliance/widgets/image_sync_selector.dart';
 import 'package:the_purple_alliance/widgets/simple_password_form_field.dart';
@@ -31,9 +32,10 @@ class SettingsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
+    var config = context.watch<ConfigState>();
     final theme = Theme.of(context);
     var genericTextStyle = TextStyle(color: theme.colorScheme.onPrimaryContainer);
-    var buttonColor = (appState.locked && appState.builder == null) ? const Color.fromARGB(0, 0, 0, 0) : null;
+    var buttonColor = (config.locked && appState.builder == null) ? const Color.fromARGB(0, 0, 0, 0) : null;
     return Padding(
       padding: const EdgeInsets.all(20.0),
       child: Form(
@@ -41,12 +43,12 @@ class SettingsPage extends StatelessWidget {
         autovalidateMode: AutovalidateMode.onUserInteraction,
         child: ListView(
           children: [
-            UnsavedChangesBar(theme: theme, initialValue: () => appState.unsavedChanges),
+            UnsavedChangesBar(theme: theme, initialValue: () => config.unsavedChanges),
             Row(
               children: [
                 Column(
                   children: [
-                    if (appState.locked)
+                    if (config.locked)
                       IconButton(
                         onPressed: () async {
                           await appState.reconnect();
@@ -56,7 +58,7 @@ class SettingsPage extends StatelessWidget {
                       ),
                     IconButton(
                       onPressed: () async {
-                        if (appState.locked) {
+                        if (config.locked) {
                           if (appState.builder != null) { //don't unlock if currently connecting - that could cause problems
                             await appState.unlock();
                           } else {
@@ -93,18 +95,18 @@ class SettingsPage extends StatelessWidget {
                       hoverColor: buttonColor,
                       focusColor: buttonColor,
                       icon: Icon(
-                        appState.locked ? Icons.lock_outlined : Icons.wifi,
-                        color: appState.locked ? (appState.builder == null ? Colors.amber : Colors.red) : Colors.green,
+                        config.locked ? Icons.lock_outlined : Icons.wifi,
+                        color: config.locked ? (appState.builder == null ? Colors.amber : Colors.red) : Colors.green,
                       ),
-                      tooltip: appState.locked
+                      tooltip: config.locked
                           ? (appState.builder == null ? "Connecting" : "Unlock connection settings")
                           : "Connect",
                     ),
-                    if (appState.locked || _isQRScanningSupported())
+                    if (config.locked || _isQRScanningSupported())
                       IconButton(
                         onPressed: () {
                           const identifier = "com.team1661.the_purple_alliance";
-                          if (appState.locked) { //provide connection data
+                          if (config.locked) { //provide connection data
                             Navigator.push(
                                 context,
                                 MaterialPageRoute(
@@ -118,9 +120,9 @@ class SettingsPage extends StatelessWidget {
                                         child: QrImageView(
                                           data: jsonEncode({
                                             "identifier": identifier,
-                                            "team_number": appState.getDisplayTeamNumber(),
-                                            "server": appState.serverUrl,
-                                            "password": appState.password,
+                                            "team_number": config.getDisplayTeamNumber(),
+                                            "server": config.serverUrl,
+                                            "password": config.password,
                                           }),
                                           size: 280,
                                         ),
@@ -190,10 +192,10 @@ class SettingsPage extends StatelessWidget {
                                                   if (decoded is Map<String, dynamic> && decoded.containsKey("identifier") &&
                                                       decoded["identifier"] == identifier && decoded["team_number"] is int &&
                                                       decoded["server"] is String && decoded["password"] is String) {
-                                                    appState.teamNumberInProgress = decoded["team_number"];
-                                                    appState.serverUrlInProgress = decoded["server"];
-                                                    appState.password = decoded["password"];
-                                                    log("Decoded number: ${appState.teamNumberInProgress}");
+                                                    config.teamNumberInProgress = decoded["team_number"];
+                                                    config.serverUrlInProgress = decoded["server"];
+                                                    config.password = decoded["password"];
+                                                    log("Decoded number: ${config.teamNumberInProgress}");
                                                     appState.scaffoldKey.currentState?.showSnackBar(const SnackBar(content: Text("Obtained connection data")));
                                                     log("Connection data got!");
                                                     alreadyGot = true;
@@ -225,16 +227,16 @@ class SettingsPage extends StatelessWidget {
                           }
                         },
                         icon: Icon(
-                          appState.locked ? Icons.qr_code : Icons.qr_code_scanner,
+                          config.locked ? Icons.qr_code : Icons.qr_code_scanner,
                         ),
-                        tooltip: appState.locked ? "Show QR code" : "Scan QR code",
+                        tooltip: config.locked ? "Show QR code" : "Scan QR code",
                       ),
                   ],
                 ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Card(
-                      color: appState.locked ? theme.colorScheme
+                      color: config.locked ? theme.colorScheme
                           .tertiaryContainer : (!oldColors ? null : theme.colorScheme.primaryContainer),
                       child: Padding(
                           padding: const EdgeInsets.all(20.0),
@@ -247,14 +249,14 @@ class SettingsPage extends StatelessWidget {
                                     labelText: "Team Number",
                                     labelStyle: genericTextStyle,
                                   ),
-                                  controller: TextEditingController(text: "${appState.getDisplayTeamNumber()}"),
+                                  controller: TextEditingController(text: "${config.getDisplayTeamNumber()}"),
                                   keyboardType: TextInputType.number,
-                                  readOnly: appState.locked,
+                                  readOnly: config.locked,
 //                                  initialValue: "${appState.getDisplayTeamNumber()}",
                                   onChanged: (value) {
                                     var number = int.tryParse(value);
                                     if (number != null) {
-                                      appState.teamNumberInProgress = number;
+                                      config.teamNumberInProgress = number;
                                     }
                                   },
                                   validator: (String? value) {
@@ -271,11 +273,11 @@ class SettingsPage extends StatelessWidget {
                                     labelText: "Server",
                                     labelStyle: genericTextStyle,
                                   ),
-                                  controller: TextEditingController(text: appState.getDisplayUrl()),
+                                  controller: TextEditingController(text: config.getDisplayUrl()),
                                   keyboardType: TextInputType.url,
-                                  readOnly: appState.locked,
+                                  readOnly: config.locked,
                                   onChanged: (value) {
-                                    appState.serverUrlInProgress = value;
+                                    config.serverUrlInProgress = value;
                                   },
                                   validator: (String? value) {
                                     if (value == null || value == "") {
@@ -291,11 +293,11 @@ class SettingsPage extends StatelessWidget {
                                     labelText: "Name",
                                     labelStyle: genericTextStyle,
                                   ),
-                                  controller: TextEditingController(text: appState.username),
+                                  controller: TextEditingController(text: config.username),
                                   keyboardType: TextInputType.name,
-                                  readOnly: appState.locked,
+                                  readOnly: config.locked,
                                   onChanged: (value) {
-                                    appState.username = value;
+                                    config.username = value;
                                   },
                                   validator: (String? value) {
                                     if (value == null || value == "") {
@@ -304,7 +306,7 @@ class SettingsPage extends StatelessWidget {
                                     return null;
                                   },
                                 ),
-                                SimplePasswordFormField(formKey: _passwordKey, genericTextStyle: genericTextStyle, appState: appState),
+                                SimplePasswordFormField(formKey: _passwordKey, genericTextStyle: genericTextStyle, config: config),
                               ]
                           )
                       )
@@ -355,9 +357,9 @@ class SettingsPage extends StatelessWidget {
                         ),
 //                        const SizedBox(width: 2),
                         Switch(
-                          value: appState.colorfulTeams,
+                          value: config.colorfulTeams,
                           onChanged: (value) {
-                            appState.colorfulTeams = value;
+                            config.colorfulTeams = value;
                           },
                         )
                       ],
@@ -375,9 +377,9 @@ class SettingsPage extends StatelessWidget {
                           ),
                         ),
                         Switch(
-                          value: appState.teamColorReminder,
+                          value: config.teamColorReminder,
                           onChanged: (value) {
-                            appState.teamColorReminder = value;
+                            config.teamColorReminder = value;
                           },
                         )
                       ],

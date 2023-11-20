@@ -2,6 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
+import 'package:the_purple_alliance/state/meta/config_state.dart';
 
 class TeamTile extends StatelessWidget {
   final int teamNo;
@@ -17,7 +18,8 @@ class TeamTile extends StatelessWidget {
   Widget build(BuildContext context) {
     var theme = Theme.of(context);
     var appState = context.watch<MyAppState>();
-    final Color color = appState.colorfulTeams ? Colors.primaries[teamNo % Colors.primaries.length] : theme.colorScheme.tertiaryContainer;
+    var config = context.watch<ConfigState>();
+    final Color color = config.colorfulTeams ? Colors.primaries[teamNo % Colors.primaries.length] : theme.colorScheme.tertiaryContainer;
     return Card(
       elevation: 5,
       color: color,
@@ -27,7 +29,7 @@ class TeamTile extends StatelessWidget {
           await Future.delayed(const Duration(milliseconds: 250));
           _viewTeam();
         },
-        splashColor: appState.colorfulTeams ? Color.fromARGB(255, 255-color.red, 255-color.green, 255-color.blue) : null,
+        splashColor: config.colorfulTeams ? Color.fromARGB(255, 255-color.red, 255-color.green, 255-color.blue) : null,
         customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
         child: Center(child: Text(
             "$teamNo",

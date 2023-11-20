@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:the_purple_alliance/main.dart';
+import 'package:the_purple_alliance/state/meta/config_state.dart';
 
 class UnsavedChangesBar extends StatefulWidget {
   const UnsavedChangesBar({
@@ -37,8 +37,8 @@ class UnsavedChangesBarState extends State<UnsavedChangesBar> {
 
   @override
   Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-    appState.unsavedChangesBarState = WeakReference(this);
+    var config = context.watch<ConfigState>();
+    config.unsavedChangesBarState = WeakReference(this);
     return unsavedChanges ? Card(
         color: widget.theme.colorScheme.error,
         child: Padding(
@@ -61,7 +61,7 @@ class UnsavedChangesBarState extends State<UnsavedChangesBar> {
                   visualDensity: VisualDensity.compact,
                 ),
                 onPressed: () async {
-                  await appState.saveConfig();
+                  await config.saveConfig();
                 },
                 icon: Icon(
                   Icons.save_outlined,

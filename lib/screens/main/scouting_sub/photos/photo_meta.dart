@@ -3,8 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:the_purple_alliance/main.dart';
 import 'package:the_purple_alliance/state/images/image_record.dart';
+import 'package:the_purple_alliance/state/meta/config_state.dart';
 
 class PhotoMetaPage extends StatelessWidget {
   final String imagePath;
@@ -15,7 +15,7 @@ class PhotoMetaPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    var appState = context.watch<MyAppState>();
+    var config = context.watch<ConfigState>();
     return Scaffold(
         appBar: AppBar(
           title: const Text("Image metadata"),
@@ -53,7 +53,7 @@ class PhotoMetaPage extends StatelessWidget {
                               label: const Text("Post", style: TextStyle(color: Colors.black)),
                               onPressed: () {
                                 //print("making record: $tagSelectionKey; ${tagSelectionKey.currentState}; ${tagSelectionKey.currentState?.tags}");
-                                ImageRecord record = ImageRecord("", appState.username, _tagSelectionKey.currentState?.tags ?? [], teamNumber);
+                                ImageRecord record = ImageRecord("", config.username, _tagSelectionKey.currentState?.tags ?? [], teamNumber);
                                 Navigator.of(context).pop(record);
                               },
                               style: ButtonStyle(backgroundColor: MaterialStateProperty.all(Colors.green))
