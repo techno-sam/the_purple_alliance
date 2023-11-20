@@ -106,6 +106,16 @@ int sum(Iterable<int> nums) {
   return v;
 }
 
+int max(Iterable<int> nums) {
+  int v = nums.isEmpty ? 0 : nums.first;
+  for (int num in nums) {
+    if (num > v) {
+      v = num;
+    }
+  }
+  return v;
+}
+
 // can be searched
 class DropdownDataValue extends DataValue implements SearchDataEmitter {
   String _value = "";
@@ -173,7 +183,7 @@ class DropdownDataValue extends DataValue implements SearchDataEmitter {
   int getCurrentPoints(dynamic config) => (config as Map<String, int>)[value] ?? 0;
 
   @override
-  int getMaxPoints(dynamic config) => (config as Map<String, int>).containsKey(value) ? sum((config as Map<String, int>).values) : 0;
+  int getMaxPoints(dynamic config) => (config as Map<String, int>).containsKey(value) ? max((config as Map<String, int>).values) : 0;
 
   @override
   Map<String, int> get defaultConfig => {};

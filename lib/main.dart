@@ -139,6 +139,12 @@ class MyAppState extends ChangeNotifier {
     return File('$path/config.json');
   }
 
+  Future<File> get _searchFile async {
+    final path = await _localPath;
+    await Directory(path).create(recursive: true);
+    return File('$path/search.json');
+  }
+
   Future<File> get _dataFile async {
     final path = await _localPath;
     await Directory(path).create(recursive: true);
@@ -400,6 +406,25 @@ class MyAppState extends ChangeNotifier {
     return true;
   }
 
+  Future<Map<String, Map<String, dynamic>>?> get _previousSearchConfigurations async {
+    Map<String, Map<String, dynamic>> out = {};
+    var previousData = await readJsonFile(_searchFile);
+    if (previousData is Map<String, dynamic>) {
+      for (var entry in previousData.entries) {
+        if (entry.value is Map<String, dynamic>) {
+          out[entry.key] = entry.value;
+        }
+      }
+      return out;
+    } else {
+      return null;
+    }
+  }
+
+  Future<File?> _setPreviousSearchConfigurations(Map<String, Map<String, dynamic>>? data) async {
+    return await compute2(writeJsonFile, await _searchFile, data ?? {});
+  }
+
   Future<Map<String, dynamic>?> get _previousData async {
     var previousData = await readJsonFile(_dataFile);
     if (previousData is Map<String, dynamic>) {
@@ -641,11 +666,17 @@ class MyAppState extends ChangeNotifier {
     } else {
       checkedCompetition = true;
     }
+    searchConfigurations = {};
     if (!atDifferentCompetition) {
       await _previousData.then((v) {
         if (v != null) {
           builder?.initializeValues(v.keys);
           builder?.teamManager.load(v, true);
+        }
+      });
+      await _previousSearchConfigurations.then((v) {
+        if (v != null) {
+          searchConfigurations = v;
         }
       });
     } else {
@@ -667,7 +698,9 @@ class MyAppState extends ChangeNotifier {
   Future<void> unlock() async {
     _teamNumberInProgress = _teamNumber ?? 1234;
     _serverUrlInProgress = _serverUrl ?? "example.com";
-    Future<File?> future = _setPreviousData(builder?.teamManager.save()).then((_) async => await imageSyncManager.save());
+    Future<File?> future = _setPreviousData(builder?.teamManager.save())
+        .then((_) async => await imageSyncManager.save())
+        .then((_) async => await _setPreviousSearchConfigurations(searchConfigurations));
     builder = null;
     await future.then((_) {
       locked = false;
@@ -832,6 +865,7 @@ class MyAppState extends ChangeNotifier {
       _currentlySaving = true;
       await _setPreviousData(builder!.teamManager.save());
       await imageSyncManager.save();
+      await _setPreviousSearchConfigurations(searchConfigurations);
       if (kDebugMode) {
         log("Saved...");
       }
@@ -922,7 +956,7 @@ class _MyHomePageState extends State<MyHomePage> {
         }); //experiments
         break;
       case Pages.search:
-        page = SearchPage();
+        page = const SearchPage();
         break;
       case Pages.settings:
         page = SettingsPage(); //settings
@@ -973,7 +1007,7 @@ class _MyHomePageState extends State<MyHomePage> {
         },
         fabInRail: false,
         navigationBackgroundColor: appState.teamColorReminder ? (appState.teamColorBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
-        floatingActionButton: selectedPage == Pages.settings || selectedPage == Pages.search ? null : (getWindowType(context) >= AdaptiveWindowType.medium ? Row.new : Column.new)(
+        floatingActionButton: selectedPage == Pages.settings ? null : (getWindowType(context) >= AdaptiveWindowType.medium ? Row.new : Column.new)(
           mainAxisSize: MainAxisSize.min,
           mainAxisAlignment: MainAxisAlignment.end,
           children: [
@@ -988,17 +1022,16 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
             if (selectedPage != Pages.search)
               const SizedBox(width: 10, height: 10),
-            if (selectedPage != Pages.search)
-              FloatingActionButton(
-                heroTag: "saveData",
-                onPressed: () async {
-                  await appState.runSave(manual: true);
-                },
-                tooltip: "Save local data",
-                child: const Icon(
-                  Icons.save_outlined,
-                ),
+            FloatingActionButton(
+              heroTag: "saveData",
+              onPressed: () async {
+                await appState.runSave(manual: true);
+              },
+              tooltip: "Save local data",
+              child: const Icon(
+                Icons.save_outlined,
               ),
+            ),
           ],
         ),
       ),
@@ -1772,7 +1805,7 @@ class SettingsPage extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
-            Row(
+            Column(
               children: [
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
@@ -1824,7 +1857,7 @@ class SettingsPage extends StatelessWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 20),
+                const SizedBox(height: 20),
                 ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Colors.deepOrange,

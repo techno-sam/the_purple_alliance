@@ -8,7 +8,7 @@ abstract class SearchDataEmitter {
   dynamic get defaultConfig;
 }
 
-extension RankableDatamanager on DataManager {
+extension RankableDataManager on DataManager {
   /*
   (points, maxPoints)
    */

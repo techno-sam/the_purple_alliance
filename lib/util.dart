@@ -29,6 +29,10 @@ class Pair<A, B> {
     _first = first;
     _second = second;
   }
+
+  T map<T>(T Function(A, B) mapper) {
+    return mapper.call(first, second);
+  }
 }
 
 class Couple<T> extends Pair<T, T> {

@@ -102,9 +102,10 @@ class _PhotosPageState extends State<PhotosPage> {
             ),
             itemBuilder: (context, index) {
               String? hash = index == 0 ? null : appState.imageSyncManager.knownImages.where((record) => record.team == widget.teamNumber).elementAt(index - 1).uuid;
-              return index == 0 ? CameraTile(() async => await cameraHandler(imageSyncManager)) : ImageTile(index - 1,
+              return index == 0 ? CameraTile(() async => await cameraHandler(imageSyncManager)) : ImageTile(
                   hash!,
-                  key: _gridKeys.putIfAbsent(hash, () => GlobalKey<State<ImageTile>>(debugLabel: "imageTile$hash")));
+                  key: _gridKeys.putIfAbsent(hash, () => GlobalKey<State<ImageTile>>(debugLabel: "imageTile$hash"))
+              );
             },
           ) : ScrollConfiguration(
             behavior: ScrollConfiguration.of(context).copyWith(dragDevices: _extendedScrollableTypes),
@@ -118,7 +119,7 @@ class _PhotosPageState extends State<PhotosPage> {
                 prototypeItem: const AspectRatio(aspectRatio: 5/8),
                 itemBuilder: (context, index) {
                   String? hash = index ==0 ? null : appState.imageSyncManager.knownImages.where((record) => record.team == widget.teamNumber).elementAt(index - 1).uuid;
-                  return index == 0 ? CameraCard(() async => await cameraHandler(imageSyncManager)) : ImageCard(index - 1, hash!, key: _listKeys.putIfAbsent(hash, () => GlobalKey<State<ImageCard>>(debugLabel: "ImageCard$hash")));
+                  return index == 0 ? CameraCard(() async => await cameraHandler(imageSyncManager)) : ImageCard(hash!, key: _listKeys.putIfAbsent(hash, () => GlobalKey<State<ImageCard>>(debugLabel: "ImageCard$hash")));
                 }
                 /*children: [
                   CameraCard(() async => await cameraHandler(imageSyncManager)),
@@ -202,9 +203,8 @@ class CameraTile extends StatelessWidget {
 }
 
 class ImageCard extends StatefulWidget {
-  final int index;
   final String hash;
-  const ImageCard(this.index, this.hash, {super.key});
+  const ImageCard(this.hash, {super.key});
 
   @override
   State<ImageCard> createState() => _ImageCardState();
@@ -232,7 +232,7 @@ class _ImageCardState extends State<ImageCard> {
     final theme = Theme.of(context);
     var appState = context.watch<MyAppState>();
     var syncManager = appState.imageSyncManager;
-    ImageRecord record = syncManager.knownImages[widget.index];
+    ImageRecord record = syncManager.knownImages.firstWhere((element) => element.uuid == widget.hash);
     String hash = record.uuid;
     bool imageExists = syncManager.downloadedUUIDs.contains(hash);
 
@@ -342,9 +342,8 @@ class _ImageCardState extends State<ImageCard> {
 }
 
 class ImageTile extends StatefulWidget {
-  final int index;
   final String hash;
-  const ImageTile(this.index, this.hash, {super.key});
+  const ImageTile(this.hash, {super.key});
 
   @override
   State<ImageTile> createState() => _ImageTileState();
@@ -372,7 +371,7 @@ class _ImageTileState extends State<ImageTile> {
     final theme = Theme.of(context);
     var appState = context.watch<MyAppState>();
     var syncManager = appState.imageSyncManager;
-    ImageRecord record = syncManager.knownImages[widget.index];
+    ImageRecord record = syncManager.knownImages.firstWhere((element) => element.uuid == widget.hash);
     String hash = record.uuid;
     bool imageExists = syncManager.downloadedUUIDs.contains(hash);
     /*Future<File> imageFuture = syncManager.getImageFile(hash, quick: true).then((f) async {
