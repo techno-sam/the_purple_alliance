@@ -78,3 +78,15 @@ double roundDouble(double value, int places){
   return ((value * mod).round().toDouble() / mod);
 }
 
+
+/// Returns the problem with the url if there is one, or null if the url is OK
+String? verifyServerUrl(String url) {
+  var tmp = Uri.tryParse(url);
+  if (tmp == null) {
+    return "Failed to parse url";
+  }
+  if (!tmp.isScheme("https")) { //just don't verify scheme temporarily
+    return "Invalid scheme for server: ${tmp.scheme.isEmpty ? "[Blank]" : tmp.scheme}. Must be 'https'.";
+  }
+  return null;
+}

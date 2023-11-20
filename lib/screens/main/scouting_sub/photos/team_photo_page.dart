@@ -5,9 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
 import 'package:camera/camera.dart';
+import 'package:the_purple_alliance/screens/main/scouting_sub/photos/photo_meta.dart';
+import 'package:the_purple_alliance/screens/main/scouting_sub/photos/take_photo.dart';
 
-import 'package:the_purple_alliance/screens/main/photos/photo_meta.dart';
-import 'package:the_purple_alliance/screens/main/photos/take_photo.dart';
 import 'package:the_purple_alliance/utils/util.dart';
 import 'package:the_purple_alliance/state/data_manager.dart';
 import 'package:the_purple_alliance/widgets/team_photos/camera_card.dart';

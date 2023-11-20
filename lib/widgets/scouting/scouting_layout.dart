@@ -3,8 +3,8 @@ import 'dart:developer';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
-import 'package:the_purple_alliance/screens/main/comments_list_page.dart';
-import 'package:the_purple_alliance/screens/main/photos/team_photo_page.dart';
+import 'package:the_purple_alliance/screens/main/scouting_sub/comments_list_page.dart';
+import 'package:the_purple_alliance/screens/main/scouting_sub/photos/team_photo_page.dart';
 import 'package:the_purple_alliance/state/search_system.dart';
 import 'package:the_purple_alliance/widgets/display_card.dart';
 import 'package:the_purple_alliance/state/data_manager.dart';
@@ -787,7 +787,7 @@ class ExperimentBuilder {
   }
 }
 
-List<Widget> buildExperiment(BuildContext context, ExperimentBuilder? builder, void Function() goToTeamSelectionPage) {
+List<Widget> buildScoutingLayout(BuildContext context, ExperimentBuilder? builder, void Function() goToTeamSelectionPage) {
   if (builder != null) {
     return builder.build(context, goToTeamSelectionPage);
   }

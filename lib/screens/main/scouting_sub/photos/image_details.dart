@@ -2,7 +2,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:the_purple_alliance/screens/main/photos/team_photo_page.dart';
+import 'package:the_purple_alliance/screens/main/scouting_sub/photos/team_photo_page.dart';
 
 import 'package:the_purple_alliance/state/data_manager.dart';
 

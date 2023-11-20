@@ -3,28 +3,21 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
 
-import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
-import 'package:adaptive_navigation/adaptive_navigation.dart';
-import 'package:camera/camera.dart';
 import 'package:english_words/english_words.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:qr_flutter/qr_flutter.dart';
-import 'package:mobile_scanner/mobile_scanner.dart';
-import 'package:the_purple_alliance/navigation/color_adaptive_scaffold.dart';
+
+import 'package:the_purple_alliance/screens/main/main_page.dart';
 import 'package:the_purple_alliance/state/data_manager.dart';
-import 'package:the_purple_alliance/widgets/display_card.dart';
 import 'package:the_purple_alliance/widgets/image_sync_selector.dart';
 import 'package:the_purple_alliance/widgets/scouting/scouting_layout.dart';
-
 import 'package:the_purple_alliance/state/network.dart' as network;
 import 'package:the_purple_alliance/utils/util.dart';
 import 'package:the_purple_alliance/widgets/sync_time_selector.dart';
+import 'package:the_purple_alliance/widgets/unsaved_changes_bar.dart';
 
-import 'screens/main/search_page.dart';
 
 
 void main() {
@@ -36,19 +29,19 @@ void main() {
   runApp(MyApp());
 }
 
-var oldColors = false;
+const bool oldColors = false;
 
 class MyApp extends StatelessWidget {
   MyApp({super.key});
 
   final _scaffoldKey = GlobalKey<ScaffoldMessengerState>();
-  final _homepageKey = GlobalKey<_MyHomePageState>();
+  final _mainPageKey = GlobalKey<State<MainPage>>();
 
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-        create: (context) => MyAppState(_scaffoldKey, _homepageKey),
+        create: (context) => MyAppState(_scaffoldKey, _mainPageKey),
         child: ChangeNotifierProvider(
           create: (context) => Provider.of<MyAppState>(context, listen: false).imageSyncManager,
           child: MaterialApp(
@@ -60,23 +53,11 @@ class MyApp extends StatelessWidget {
                 seedColor: Colors.purple,
               ),
             ),
-            home: MyHomePage(key: _homepageKey),
+            home: MainPage(key: _mainPageKey),
           ),
         )
     );
   }
-}
-
-/// Returns the problem with the url if there is one, or null if the url is OK
-String? _verifyServerUrl(String url) {
-  var tmp = Uri.tryParse(url);
-  if (tmp == null) {
-    return "Failed to parse url";
-  }
-  if (!tmp.isScheme("https")) { //just don't verify scheme temporarily
-    return "Invalid scheme for server: ${tmp.scheme.isEmpty ? "[Blank]" : tmp.scheme}. Must be 'https'.";
-  }
-  return null;
 }
 
 class MyAppState extends ChangeNotifier {
@@ -98,18 +79,18 @@ class MyAppState extends ChangeNotifier {
       : searchConfigurations.putIfAbsent(currentSearchConfiguration!, () => {});
 
   var __unsavedChanges = false;
-  bool get _unsavedChanges => __unsavedChanges;
-  set _unsavedChanges(bool value) {
+  bool get unsavedChanges => __unsavedChanges;
+  set unsavedChanges(bool value) {
     if (__unsavedChanges != value) {
       __unsavedChanges = value;
-      if ((_unsavedChangesBarState?.target?.unsavedChanges ?? value) != value) {
-        _unsavedChangesBarState?.target?.setUnsavedChanges(value);
+      if ((unsavedChangesBarState?.target?.unsavedChanges ?? value) != value) {
+        unsavedChangesBarState?.target?.setUnsavedChanges(value);
       }
     }
   }
   var current = WordPair.random();
 
-  WeakReference<_UnsavedChangesBarState>? _unsavedChangesBarState;
+  WeakReference<UnsavedChangesBarState>? unsavedChangesBarState;
 
   void getNext() {
     current = WordPair.random();
@@ -225,7 +206,7 @@ class MyAppState extends ChangeNotifier {
   Future<File?> saveConfig() async {
     return await writeConfig(_config).then(
         (v) {
-          _unsavedChanges = false;
+          unsavedChanges = false;
           return v;
         }
     );
@@ -243,8 +224,8 @@ class MyAppState extends ChangeNotifier {
       "image_sync_mode": imageSyncMode.name,
       "connection": {
         "locked": locked,
-        "team_number": locked ? _teamNumber ?? _teamNumberInProgress : _teamNumberInProgress,
-        "url": locked ? _serverUrl ?? _serverUrlInProgress : _serverUrlInProgress,
+        "team_number": locked ? _teamNumber ?? teamNumberInProgress : teamNumberInProgress,
+        "url": locked ? serverUrl ?? serverUrlInProgress : serverUrlInProgress,
         "username": username,
         "password": __password,
       },
@@ -276,12 +257,12 @@ class MyAppState extends ChangeNotifier {
         shouldConnect = connection["locked"];
       }
       if (connection["team_number"] is int) {
-        _teamNumberInProgress = connection["team_number"];
+        teamNumberInProgress = connection["team_number"];
       } else {
         shouldConnect = false;
       }
       if (connection["url"] is String) {
-        _serverUrlInProgress = connection["url"];
+        serverUrlInProgress = connection["url"];
       } else {
         shouldConnect = false;
       }
@@ -300,24 +281,24 @@ class MyAppState extends ChangeNotifier {
       }
     }
     notifyListeners();
-    _unsavedChanges = false;
+    unsavedChanges = false;
   }
 
   var locked = false;
   var __teamNumberInProgress = 1234;
-  int get _teamNumberInProgress => __teamNumberInProgress;
-  set _teamNumberInProgress(int value) {
-    _unsavedChanges = true;
+  int get teamNumberInProgress => __teamNumberInProgress;
+  set teamNumberInProgress(int value) {
+    unsavedChanges = true;
     __teamNumberInProgress = value;
   }
   var __serverUrlInProgress = "example.com";
-  String get _serverUrlInProgress => __serverUrlInProgress;
-  set _serverUrlInProgress(String value) {
-    _unsavedChanges = true;
+  String get serverUrlInProgress => __serverUrlInProgress;
+  set serverUrlInProgress(String value) {
+    unsavedChanges = true;
     __serverUrlInProgress = value;
   }
   int? _teamNumber;
-  String? _serverUrl;
+  String? serverUrl;
   ExperimentBuilder? builder;
 
   String? _error;
@@ -325,18 +306,18 @@ class MyAppState extends ChangeNotifier {
   String _username = "";
   String get username => _username;
   set username(String value) {
-    _unsavedChanges = true;
+    unsavedChanges = true;
     _username = value;
   }
 
   String __password = "";
-  String get _password => __password;
-  set _password(String value) {
+  String get password => __password;
+  set password(String value) {
     if (locked) {
       log("Attempted password set while locked!");
       return;
     }
-    _unsavedChanges = true;
+    unsavedChanges = true;
     __password = value;
   }
 
@@ -347,14 +328,14 @@ class MyAppState extends ChangeNotifier {
   SyncInterval _syncInterval = SyncInterval.manual;
   SyncInterval get syncInterval => _syncInterval;
   set syncInterval(SyncInterval value) {
-    _unsavedChanges = true;
+    unsavedChanges = true;
     _syncInterval = value;
   }
 
   ImageSyncMode _imageSyncMode = ImageSyncMode.manual;
   ImageSyncMode get imageSyncMode => _imageSyncMode;
   set imageSyncMode(ImageSyncMode value) {
-    _unsavedChanges = true;
+    unsavedChanges = true;
     _imageSyncMode = value;
   }
 
@@ -365,7 +346,7 @@ class MyAppState extends ChangeNotifier {
   set colorfulTeams(bool value) {
     _colorfulTeams = value;
     notifyListeners();
-    _unsavedChanges = true;
+    unsavedChanges = true;
   }
 
   bool _teamColorReminder = false;
@@ -375,7 +356,7 @@ class MyAppState extends ChangeNotifier {
   set teamColorReminder(bool value) {
     _teamColorReminder = value;
     notifyListeners();
-    _unsavedChanges = true;
+    unsavedChanges = true;
   }
 
   bool _teamColorBlue = false; // whether the team color reminder is blue or red
@@ -385,7 +366,7 @@ class MyAppState extends ChangeNotifier {
   set teamColorBlue(bool value) {
     _teamColorBlue = value;
     notifyListeners();
-    _unsavedChanges = true;
+    unsavedChanges = true;
   }
 
   bool _setTeamNumber(int teamNumber) {
@@ -398,11 +379,11 @@ class MyAppState extends ChangeNotifier {
 
   bool _setServer(String url) {
     if (!locked) {
-      _serverUrl = url;
-      var error = _verifyServerUrl(url);
+      serverUrl = url;
+      var error = verifyServerUrl(url);
       if (error != null) {
         _error = error;
-        _serverUrl = null;
+        serverUrl = null;
         return false;
       }
       notifyListeners();
@@ -507,7 +488,7 @@ class MyAppState extends ChangeNotifier {
   }
 
   network.Connection get httpClient {
-    return network.Connection(_serverUrl ?? "https://example.com", username, _password);
+    return network.Connection(serverUrl ?? "https://example.com", username, password);
   }
 
   bool checkedCompetition = false; // keep track of whether we've checked what competition we are at yet. if we haven't checked yet, we don't want to send bad data.
@@ -561,19 +542,19 @@ class MyAppState extends ChangeNotifier {
   }
 
   Future<void> connect({bool reconnecting = false}) async {
-    bool success1 = _setTeamNumber(_teamNumberInProgress);
-    bool success2 = _setServer(_serverUrlInProgress);
+    bool success1 = _setTeamNumber(teamNumberInProgress);
+    bool success2 = _setServer(serverUrlInProgress);
     if (success1 && success2) {
       locked = true;
-      log("Connecting with team_number: $_teamNumber, url: $_serverUrl");
+      log("Connecting with team_number: $_teamNumber, url: $serverUrl");
     } else {
       log("Failed to connect ($_error)");
       _teamNumber = null;
-      _serverUrl = null;
+      serverUrl = null;
       notifyListeners();
       return;
     }
-    bool serverFound = await compute(network.testUnauthorizedConnection, _serverUrl ?? "https://example.com");
+    bool serverFound = await compute(network.testUnauthorizedConnection, serverUrl ?? "https://example.com");
     if (!reconnecting) { // first time we connect, ensure we have a proper connection
       bool serverAuthorized = await compute(network.testAuthorizedConnection, httpClient);
       if (serverFound && serverAuthorized) {
@@ -588,7 +569,7 @@ class MyAppState extends ChangeNotifier {
         ));
         locked = false;
         _teamNumber = null;
-        _serverUrl = null;
+        serverUrl = null;
         notifyListeners();
         return;
       } else {
@@ -598,7 +579,7 @@ class MyAppState extends ChangeNotifier {
         ));
         locked = false;
         _teamNumber = null;
-        _serverUrl = null;
+        serverUrl = null;
         notifyListeners();
         return;
       }
@@ -609,14 +590,14 @@ class MyAppState extends ChangeNotifier {
     Map<String, dynamic>? remoteServerMeta;
     if (serverFound) {
       remoteServerMeta = await getServerMeta();
-      int myTeamNumber = _teamNumber ?? _teamNumberInProgress;
+      int myTeamNumber = _teamNumber ?? teamNumberInProgress;
       var remoteTeamNumber = remoteServerMeta.containsKey("team") ? remoteServerMeta["team"] : null;
       if (remoteTeamNumber != myTeamNumber || remoteTeamNumber == null) {
         remoteServerMeta = null;
         serverFound = false;
         locked = false;
         _teamNumber = null;
-        _serverUrl = null;
+        serverUrl = null;
         notifyListeners();
         log("Remote team $remoteTeamNumber does not match $myTeamNumber");
         scaffoldKey.currentState?.clearSnackBars();
@@ -625,7 +606,7 @@ class MyAppState extends ChangeNotifier {
           action: remoteTeamNumber is int ? SnackBarAction(
             label: "Set",
             onPressed: () {
-              _teamNumberInProgress = remoteTeamNumber;
+              teamNumberInProgress = remoteTeamNumber;
               notifyListeners();
             }
           ) : null,
@@ -700,8 +681,8 @@ class MyAppState extends ChangeNotifier {
   }
 
   Future<void> unlock() async {
-    _teamNumberInProgress = _teamNumber ?? 1234;
-    _serverUrlInProgress = _serverUrl ?? "example.com";
+    teamNumberInProgress = _teamNumber ?? 1234;
+    serverUrlInProgress = serverUrl ?? "example.com";
     Future<File?> future = _setPreviousData(builder?.teamManager.save())
         .then((_) async => await imageSyncManager.save())
         .then((_) async => await _setPreviousSearchConfigurations(searchConfigurations));
@@ -722,11 +703,11 @@ class MyAppState extends ChangeNotifier {
   }
 
   int getDisplayTeamNumber() {
-    return _teamNumber ?? _teamNumberInProgress;
+    return _teamNumber ?? teamNumberInProgress;
   }
 
   String getDisplayUrl() {
-    return _serverUrl ?? _serverUrlInProgress;
+    return serverUrl ?? serverUrlInProgress;
   }
 
   int _minutesSinceLastSync = 0;
@@ -884,7 +865,7 @@ class MyAppState extends ChangeNotifier {
   }
 
   final GlobalKey<ScaffoldMessengerState> scaffoldKey;
-  final GlobalKey<_MyHomePageState> _homepageKey;
+  final GlobalKey<State<MainPage>> _homepageKey;
   BuildContext? get homepageContext => _homepageKey.currentContext;
 
   MyAppState(this.scaffoldKey, this._homepageKey) {
@@ -905,1074 +886,5 @@ class MyAppState extends ChangeNotifier {
       log("Set.");
       _noSync = false;
     });
-  }
-}
-
-enum Pages {
-//  generator(Icons.home, "Home"),
-//  favorites(Icons.favorite, "Favorites"),
-  teamSelection(Icons.list, "Teams"),
-  editor(Icons.edit_note, "Editor"),
-  search(Icons.manage_search_outlined, "Search"),
-  settings(Icons.settings, "Settings"),
-//  cameraTest(Icons.camera, "Camera Test"),
-  ;
-  final IconData icon;
-  final String title;
-  const Pages(this.icon, this.title);
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key});
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-
-  var selectedIndex = 0;
-
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-    Widget page;
-    Pages selectedPage = Pages.values[selectedIndex];
-    switch (selectedPage) {
-      /*case Pages.generator:
-        page = const GeneratorPage();
-        break;*/
-      /*case Pages.favorites:
-        page = const FavoritesPage();
-        break;*/
-      case Pages.teamSelection:
-        page = TeamSelectionPage(() {
-          setState(() {
-            selectedIndex = Pages.editor.index;
-          });
-        });
-        break;
-      case Pages.editor:
-        page = ExperimentsPage(() {
-          setState(() {
-            selectedIndex = Pages.teamSelection.index;
-          });
-        }); //experiments
-        break;
-      case Pages.search:
-        page = const SearchPage();
-        break;
-      case Pages.settings:
-        page = SettingsPage(); //settings
-        break;
-      /*case Pages.cameraTest:
-        page = TestCameraPage();
-        break;*/
-      default:
-        throw UnimplementedError("No widget for $selectedIndex");
-    }
-    return GestureDetector(
-      onTap: () {
-        //log("Tapped somewhere!");
-        FocusManager.instance.primaryFocus?.unfocus();
-      },
-      child: ColorAdaptiveNavigationScaffold(
-        body: Container(
-          color: oldColors ? Theme.of(context).colorScheme.primaryContainer : null,
-          child: page,
-        ),
-        destinations: [
-          for (Pages page in Pages.values)
-            AdaptiveScaffoldDestination(title: page.title, icon: page.icon),
-          if (appState.teamColorReminder)
-            const AdaptiveScaffoldDestination(title: 'Switch Color', icon: Icons.invert_colors),
-        ],
-        selectedIndex: selectedIndex,
-        onDestinationSelected: (value) async {
-          if (value == Pages.values.length) { // last item isn't actually a page, but a selector
-            appState.teamColorBlue = !appState.teamColorBlue;
-            await appState.saveConfig();
-          } else {
-            setState(() {
-              if (!appState.locked || appState.builder == null) {
-                value = Pages.settings.index;
-              }
-              if (selectedIndex != value && selectedIndex == Pages.settings.index && appState._unsavedChanges) { //if we're leaving the settings page, save the config
-                appState.saveConfig().then((_) {
-                  setState(() {
-                    selectedIndex = value;
-                  });
-                });
-              } else {
-                selectedIndex = value;
-              }
-            });
-          }
-        },
-        fabInRail: false,
-        navigationBackgroundColor: appState.teamColorReminder ? (appState.teamColorBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
-        floatingActionButton: selectedPage == Pages.settings ? null : (getWindowType(context) >= AdaptiveWindowType.medium ? Row.new : Column.new)(
-          mainAxisSize: MainAxisSize.min,
-          mainAxisAlignment: MainAxisAlignment.end,
-          children: [
-            if (selectedPage != Pages.search)
-              FloatingActionButton(
-                heroTag: "runSync",
-                onPressed: appState.runSynchronization,
-                tooltip: "Synchronize data with server",
-                child: const Icon(
-                  Icons.sync_alt,
-                ),
-              ),
-            if (selectedPage != Pages.search)
-              const SizedBox(width: 10, height: 10),
-            FloatingActionButton(
-              heroTag: "saveData",
-              onPressed: () async {
-                await appState.runSave(manual: true);
-              },
-              tooltip: "Save local data",
-              child: const Icon(
-                Icons.save_outlined,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class FavoritesPage extends StatelessWidget {
-  const FavoritesPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-
-    if (appState.favorites.isEmpty) {
-      return const Center(
-          child: Text('No favorites yet.')
-      );
-    } else {
-      final theme = Theme.of(context);
-      return ListView(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text('You have '
-                  '${appState.favorites.length} favorite${appState.favorites.length!=1 ? 's' : ''}:'),
-            ),
-            for (var favorite in appState.favorites)
-              ListTile(
-                title: Text(favorite.asLowerCase),
-                leading: const Icon(Icons.favorite),
-                iconColor: theme.primaryColor,
-              )
-          ]
-      );
-    }
-  }
-}
-
-class TeamTile extends StatelessWidget {
-  final int teamNo;
-  final void Function() _viewTeam;
-
-  const TeamTile(
-      this.teamNo,
-      this._viewTeam,
-      {super.key}
-      );
-
-  @override
-  Widget build(BuildContext context) {
-    var theme = Theme.of(context);
-    var appState = context.watch<MyAppState>();
-    final Color color = appState.colorfulTeams ? Colors.primaries[teamNo % Colors.primaries.length] : theme.colorScheme.tertiaryContainer;
-    return Card(
-      elevation: 5,
-      color: color,
-      child: InkWell(
-        onTap: () async {
-          appState.builder?.setTeam(teamNo);
-          await Future.delayed(const Duration(milliseconds: 250));
-          _viewTeam();
-        },
-        splashColor: appState.colorfulTeams ? Color.fromARGB(255, 255-color.red, 255-color.green, 255-color.blue) : null,
-        customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
-        child: Center(child: Text(
-          "$teamNo",
-          style: const TextStyle(
-            fontSize: 20,
-          )
-        )),
-      ),
-    );
-  }
-}
-
-class TeamSelectionPage extends StatelessWidget {
-
-  const TeamSelectionPage(this._viewTeam, {super.key});
-
-  final void Function() _viewTeam;
-
-  static final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "teamSelection");
-  static final GlobalKey<FormFieldState<String>> _entryKey = GlobalKey<FormFieldState<String>>(debugLabel: "teamSelectionEntry");
-
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-    final theme = Theme.of(context);
-    List<int> teams = appState.builder?.teamManager.managers.keys.toList() ?? [];
-    teams.sort();
-    return Padding(
-      padding: const EdgeInsets.all(8.0),
-      child: Column(
-        children: [
-          if (appState.builder != null)
-            Expanded(
-            child: GridView.builder(
-              itemCount: teams.length,
-              itemBuilder: (context, index) => TeamTile(teams[index], _viewTeam),
-              gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                maxCrossAxisExtent: 128,
-                childAspectRatio: 2.0,
-              ),
-            ),
-          ),
-          if (appState.builder != null)
-            Form(
-              autovalidateMode: AutovalidateMode.onUserInteraction,
-              key: _formKey,
-              child: Card(
-                color: oldColors ? theme.colorScheme.primaryContainer : null,
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 150,
-                        child: TextFormField(
-                          key: _entryKey,
-                          decoration: InputDecoration(
-                            border: const UnderlineInputBorder(),
-                            labelText: "Add Team",
-                            labelStyle: TextStyle(
-                              color: theme.colorScheme.onPrimaryContainer,
-                            ),
-                          ),
-                          keyboardType: TextInputType.number,
-                          initialValue: "",
-                          /*onChanged: (value) {
-                            var number = int.tryParse(value);
-  //                          if (number != null) {
-  //
-  //                          }
-                          },*/
-                          validator: (String? value) {
-                            if (value == null) {
-                              return "Value must be a number";
-                            }
-                            var num = int.tryParse(value);
-                            if (num == null) {
-                              return "Value must be a number";
-                            }
-                            if (num < 1) {
-                              return "Invalid team number";
-                            }
-                            if (num > 9999) {
-                              return "Invalid team number";
-                            }
-                            if (teams.contains(num)) {
-                              return "Already added";
-                            }
-                            return null;
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      IconButton(
-                        onPressed: () {
-                          if (_formKey.currentState != null && _formKey.currentState!.validate() && _entryKey.currentState != null) {
-                            var value = _entryKey.currentState!.value;
-                            if (value != null) {
-                              var teamNum = int.tryParse(value);
-                              if (teamNum != null && !teams.contains(teamNum)) {
-                                log('need to confirm team: ${_entryKey.currentState!.value}');
-                                showDialog(
-                                  context: context,
-                                  builder: (context) {
-                                    return AlertDialog(
-                                      title: const Text("Confirm team"),
-                                      content: Text("Do you want to add team $teamNum?\nThis cannot be undone."),
-                                      actions: [
-                                        TextButton(
-                                          child: const Text("Cancel"),
-                                          onPressed: () {
-                                            Navigator.of(context).pop();
-                                            _entryKey.currentState!.reset();
-                                          },
-                                        ),
-                                        TextButton(
-                                          child: const Text("Continue"),
-                                          onPressed: () {
-                                            Navigator.of(context).pop();
-                                            _entryKey.currentState!.reset();
-                                            log("Continuing with $teamNum");
-                                            appState.builder?.initializeTeam(teamNum);
-                                          }
-                                        ),
-                                      ],
-                                    );
-                                  },
-                                );
-                              }
-                            }
-                          }
-                        },
-                        tooltip: "Add",
-                        icon: const Icon(Icons.add_circle, size: 30),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-          if (appState.builder == null)
-            DisplayCard(text: "Not loaded", icon: Icon(Icons.error_outline, color: !oldColors ? null : theme.colorScheme.onPrimary)),
-        ],
-      ),
-    );
-  }
-}
-
-class ExperimentsPage extends StatelessWidget {
-
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "scouting");
-  static final GlobalKey _scrollKey = GlobalKey(debugLabel: "scroll");
-
-  ExperimentsPage(
-      this.goToTeamSelectionPage,
-      {super.key}
-      );
-
-  final void Function() goToTeamSelectionPage;
-
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-    var children = buildExperiment(context, appState.builder, goToTeamSelectionPage);
-    return Form(
-      key: _formKey,
-      child: Padding(
-          padding: const EdgeInsets.all(20.0),
-          child: children.length <= 1
-              ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: children
-          )
-              : SingleChildScrollView(
-            key: _scrollKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: children,
-            ),
-          ),
-      ),
-    );
-  }
-}
-
-bool _isQRScanningSupported() {
-  return Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
-}
-
-class SettingsPage extends StatelessWidget {
-
-  static final GlobalKey<FormState> _formKey = GlobalKey<FormState>(debugLabel: "settings");
-  static final GlobalKey<FormFieldState<String>> _teamNumberKey = GlobalKey<FormFieldState<String>>(debugLabel: "teamNumber");
-  static final GlobalKey<FormFieldState<String>> _serverKey = GlobalKey<FormFieldState<String>>(debugLabel: "serverUrl");
-  static final GlobalKey<FormFieldState<String>> _passwordKey = GlobalKey<FormFieldState<String>>(debugLabel: "password");
-  static final GlobalKey<FormFieldState<String>> _usernameKey = GlobalKey<FormFieldState<String>>(debugLabel: "username");
-
-  final MobileScannerController _cameraController = MobileScannerController(detectionSpeed: DetectionSpeed.noDuplicates);
-
-  SettingsPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-    final theme = Theme.of(context);
-    var genericTextStyle = TextStyle(color: theme.colorScheme.onPrimaryContainer);
-    var buttonColor = (appState.locked && appState.builder == null) ? const Color.fromARGB(0, 0, 0, 0) : null;
-    return Padding(
-      padding: const EdgeInsets.all(20.0),
-      child: Form(
-        key: _formKey,
-        autovalidateMode: AutovalidateMode.onUserInteraction,
-        child: ListView(
-          children: [
-            UnsavedChangesBar(theme: theme, initialValue: () => appState._unsavedChanges),
-            Row(
-              children: [
-                Column(
-                  children: [
-                    if (appState.locked)
-                      IconButton(
-                        onPressed: () async {
-                          await appState.reconnect();
-                        },
-                        icon: const Icon(Icons.refresh),
-                        tooltip: "Refresh scheme",
-                      ),
-                    IconButton(
-                      onPressed: () async {
-                        if (appState.locked) {
-                          if (appState.builder != null) { //don't unlock if currently connecting - that could cause problems
-                            await appState.unlock();
-                          } else {
-                            showDialog(
-                              context: context,
-                              builder: (context) {
-                                return AlertDialog(
-                                  title: const Text("Connecting"),
-                                  content: const Text("Disconnecting while connecting can cause issues. Are you sure you want to disconnect?"),
-                                  actions: [
-                                    TextButton(
-                                      child: const Text("Cancel"),
-                                      onPressed: () {
-                                        Navigator.of(context).pop();
-                                      },
-                                    ),
-                                    TextButton(
-                                      child: const Text("Disconnect"),
-                                      onPressed: () async {
-                                        Navigator.of(context).pop();
-                                        await appState.unlock();
-                                      },
-                                    ),
-                                  ],
-                                );
-                              },
-                            );
-                          }
-                        } else if (_formKey.currentState!.validate()) {
-                          await appState.connect();
-                        }
-                      },
-                      highlightColor: buttonColor,
-                      hoverColor: buttonColor,
-                      focusColor: buttonColor,
-                      icon: Icon(
-                        appState.locked ? Icons.lock_outlined : Icons.wifi,
-                        color: appState.locked ? (appState.builder == null ? Colors.amber : Colors.red) : Colors.green,
-                      ),
-                      tooltip: appState.locked
-                          ? (appState.builder == null ? "Connecting" : "Unlock connection settings")
-                          : "Connect",
-                    ),
-                    if (appState.locked || _isQRScanningSupported())
-                      IconButton(
-                        onPressed: () {
-                          const identifier = "com.team1661.the_purple_alliance";
-                          if (appState.locked) { //provide connection data
-                            Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: ((context) {
-                                    return Scaffold(
-                                      appBar: AppBar(
-                                        title: const Text("Connection Data"),
-                                        centerTitle: true,
-                                      ),
-                                      body: Center(
-                                        child: QrImageView(
-                                          data: jsonEncode({
-                                            "identifier": identifier,
-                                            "team_number": appState.getDisplayTeamNumber(),
-                                            "server": appState._serverUrl,
-                                            "password": appState._password,
-                                          }),
-                                          size: 280,
-                                        ),
-                                      ),
-                                    );
-                                  }),
-                                )
-                            );
-                          } else if (_isQRScanningSupported()) { //read connection data
-                            try {
-                              var alreadyGot = false; //prevent multiple handling of a qr code, which crashes Navigator
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: ((context) {
-                                    return Scaffold(
-                                      appBar: AppBar(
-                                        title: const Text("Scan"),
-                                        actions: [
-                                          IconButton(
-                                            color: Colors.white,
-                                            icon: ValueListenableBuilder(
-                                              valueListenable: _cameraController.torchState,
-                                              builder: (context, state, child) {
-                                                switch (state) {
-                                                  case TorchState.off:
-                                                    return const Icon(Icons.flash_off, color: Colors.grey);
-                                                  case TorchState.on:
-                                                    return const Icon(Icons.flash_on, color: Colors.yellow);
-                                                }
-                                              },
-                                            ),
-                                            iconSize: 32.0,
-                                            onPressed: () => _cameraController.toggleTorch(),
-                                          ),
-                                          IconButton(
-                                            color: Colors.white,
-                                            icon: ValueListenableBuilder(
-                                              valueListenable: _cameraController.cameraFacingState,
-                                              builder: (context, state, child) {
-                                                switch (state) {
-                                                  case CameraFacing.front:
-                                                    return const Icon(Icons.camera_front, color: Colors.blue);
-                                                  case CameraFacing.back:
-                                                    return const Icon(Icons.camera_rear, color: Colors.blue);
-                                                }
-                                              },
-                                            ),
-                                            iconSize: 32.0,
-                                            onPressed: () => _cameraController.switchCamera(),
-                                          ),
-                                        ],
-                                      ),
-                                      body: MobileScanner(
-                                        controller: _cameraController,
-                                        onDetect: (capture) async {
-                                          final List<Barcode> barcodes = capture.barcodes;
-                                          log("barcodes: $barcodes");
-                                          for (final barcode in barcodes) {
-                                            if (alreadyGot) break;
-                                            if (barcode.format == BarcodeFormat.qrCode) {
-                                              var value = barcode.rawValue;
-                                              log("Found barcode: $value");
-                                              if (value != null) {
-                                                try {
-                                                  var decoded = jsonDecode(value);
-                                                  if (decoded is Map<String, dynamic> && decoded.containsKey("identifier") &&
-                                                      decoded["identifier"] == identifier && decoded["team_number"] is int &&
-                                                      decoded["server"] is String && decoded["password"] is String) {
-                                                    appState._teamNumberInProgress = decoded["team_number"];
-                                                    appState._serverUrlInProgress = decoded["server"];
-                                                    appState._password = decoded["password"];
-                                                    log("Decoded number: ${appState._teamNumberInProgress}");
-                                                    appState.scaffoldKey.currentState?.showSnackBar(const SnackBar(content: Text("Obtained connection data")));
-                                                    log("Connection data got!");
-                                                    alreadyGot = true;
-                                                    appState.notifySettingsUpdate();
-                                                    Navigator.pop(context);
-                                                    break;
-                                                  }
-                                                } catch (e) {
-                                                  // pass
-                                                }
-                                              }
-                                            }
-                                          }
-                                        },
-                                      ),
-                                    );
-                                  }),
-                                ),
-                              );
-                            } on MissingPluginException {
-                              appState.scaffoldKey.currentState?.showSnackBar(const SnackBar(
-                                content: Text("QR Scanning is not supported on your platform"),
-                              ));
-                            }
-                          } else {
-                            appState.scaffoldKey.currentState?.showSnackBar(const SnackBar(
-                              content: Text("QR Scanning is not supported on your platform"),
-                            ));
-                          }
-                        },
-                        icon: Icon(
-                          appState.locked ? Icons.qr_code : Icons.qr_code_scanner,
-                        ),
-                        tooltip: appState.locked ? "Show QR code" : "Scan QR code",
-                      ),
-                  ],
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Card(
-                      color: appState.locked ? theme.colorScheme
-                          .tertiaryContainer : (!oldColors ? null : theme.colorScheme.primaryContainer),
-                      child: Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Column(
-                              children: [
-                                TextFormField(
-                                  key: _teamNumberKey,
-                                  decoration: InputDecoration(
-                                    border: const UnderlineInputBorder(),
-                                    labelText: "Team Number",
-                                    labelStyle: genericTextStyle,
-                                  ),
-                                  controller: TextEditingController(text: "${appState.getDisplayTeamNumber()}"),
-                                  keyboardType: TextInputType.number,
-                                  readOnly: appState.locked,
-//                                  initialValue: "${appState.getDisplayTeamNumber()}",
-                                  onChanged: (value) {
-                                    var number = int.tryParse(value);
-                                    if (number != null) {
-                                      appState._teamNumberInProgress = number;
-                                    }
-                                  },
-                                  validator: (String? value) {
-                                    if (value == null || int.tryParse(value) == null) {
-                                      return "Value must be a number";
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                TextFormField(
-                                  key: _serverKey,
-                                  decoration: InputDecoration(
-                                    border: const UnderlineInputBorder(),
-                                    labelText: "Server",
-                                    labelStyle: genericTextStyle,
-                                  ),
-                                  controller: TextEditingController(text: appState.getDisplayUrl()),
-                                  keyboardType: TextInputType.url,
-                                  readOnly: appState.locked,
-                                  onChanged: (value) {
-                                    appState._serverUrlInProgress = value;
-                                  },
-                                  validator: (String? value) {
-                                    if (value == null || value == "") {
-                                      return "Must have a url!";
-                                    }
-                                    return _verifyServerUrl(value);
-                                  },
-                                ),
-                                TextFormField(
-                                  key: _usernameKey,
-                                  decoration: InputDecoration(
-                                    border: const UnderlineInputBorder(),
-                                    labelText: "Name",
-                                    labelStyle: genericTextStyle,
-                                  ),
-                                  controller: TextEditingController(text: appState.username),
-                                  keyboardType: TextInputType.name,
-                                  readOnly: appState.locked,
-                                  onChanged: (value) {
-                                    appState.username = value;
-                                  },
-                                  validator: (String? value) {
-                                    if (value == null || value == "") {
-                                      return "Must have a name set";
-                                    }
-                                    return null;
-                                  },
-                                ),
-                                SimplePasswordFormField(formKey: _passwordKey, genericTextStyle: genericTextStyle, appState: appState),
-                              ]
-                          )
-                      )
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Card(
-              color: !oldColors ? null : theme.colorScheme.primaryContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Sync interval",
-                      style: genericTextStyle,
-                    ),
-                    const SyncTimeSelector(),
-                    const SizedBox(height: 12),
-                    Text(
-                      "Image sync",
-                      style: genericTextStyle,
-                    ),
-                    const ImageSyncSelector(),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Card(
-              color: !oldColors ? null : theme.colorScheme.primaryContainer,
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: 150,
-                          child: Text(
-                            "Colorful Team Buttons",
-                            style: genericTextStyle.copyWith(
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-//                        const SizedBox(width: 2),
-                        Switch(
-                          value: appState.colorfulTeams,
-                          onChanged: (value) {
-                            appState.colorfulTeams = value;
-                          },
-                        )
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        SizedBox(
-                          width: 150,
-                          child: Text(
-                            "Team Color Reminder",
-                            style: genericTextStyle.copyWith(
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-//                        const SizedBox(width: 2),
-                        Switch(
-                          value: appState.teamColorReminder,
-                          onChanged: (value) {
-                            appState.teamColorReminder = value;
-                          },
-                        )
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-            ),
-            const SizedBox(height: 10),
-            Column(
-              children: [
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                  ),
-                  onPressed: () async {
-                    showDialog(
-                      context: context,
-                      builder: (context) {
-                        return AlertDialog(
-                          title: const Text("Clear all local data?"),
-                          content: const Text("This will clear all local data, and force a sync with the server."),
-                          actions: [
-                            TextButton(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                              },
-                              child: const Text("Cancel"),
-                            ),
-                            TextButton(
-                              onPressed: () async {
-                                Navigator.of(context).pop();
-                                await appState.clearAllData();
-                              },
-                              child: const Text("Confirm"),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                    child: Row(
-                      children: const [
-                        Icon(
-                          Icons.warning,
-                          color: Colors.black,
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                          "Force sync data\n(Will clear all local data)",
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.black,
-                          )
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepOrange,
-                  ),
-                  onPressed: () async {
-                    showDialog(
-                      context: context,
-                      builder: (context) {
-                        return AlertDialog(
-                          title: const Text("Clear all local images?"),
-                          content: const Text("This will clear all local images."),
-                          actions: [
-                            TextButton(
-                              onPressed: () {
-                                Navigator.of(context).pop();
-                              },
-                              child: const Text("Cancel"),
-                            ),
-                            TextButton(
-                              onPressed: () async {
-                                Navigator.of(context).pop();
-                                appState.imageSyncManager.downloadedUUIDs.clear();
-                                appState.imageSyncManager.knownImages.clear();
-                              },
-                              child: const Text("Confirm"),
-                            ),
-                          ],
-                        );
-                      },
-                    );
-                  },
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                    child: Row(
-                      children: const [
-                        Icon(
-                          Icons.warning,
-                          color: Colors.black,
-                        ),
-                        SizedBox(width: 10),
-                        Text(
-                            "Clear images\n(Keeps files)",
-                            textAlign: TextAlign.center,
-                            style: TextStyle(
-                              color: Colors.black,
-                            )
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 2),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class SimplePasswordFormField extends StatefulWidget {
-  const SimplePasswordFormField({
-    super.key,
-    required this.genericTextStyle,
-    required this.appState,
-    this.formKey,
-  });
-
-  final TextStyle genericTextStyle;
-  final MyAppState appState;
-  final Key? formKey;
-
-  @override
-  State<SimplePasswordFormField> createState() => _SimplePasswordFormFieldState();
-}
-
-class _SimplePasswordFormFieldState extends State<SimplePasswordFormField> {
-
-  bool passwordVisible = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return TextFormField(
-      key: widget.formKey,
-      decoration: InputDecoration(
-        border: const UnderlineInputBorder(),
-        labelText: "Password",
-        labelStyle: widget.genericTextStyle,
-        suffixIcon: IconButton(
-          icon: Icon(
-            passwordVisible ? Icons.visibility : Icons.visibility_off,
-            color: theme.colorScheme.primary,
-          ),
-          onPressed: () {
-            setState(() {
-              passwordVisible = !passwordVisible;
-            });
-          },
-        ),
-      ),
-      controller: TextEditingController(text: widget.appState._password),
-      obscureText: !passwordVisible,
-      enableIMEPersonalizedLearning: false,
-      enableSuggestions: false,
-      keyboardType: TextInputType.visiblePassword,
-      readOnly: widget.appState.locked,
-//      initialValue: widget.appState._password,
-      onChanged: (value) {
-        widget.appState._password = value;
-      },
-      validator: (String? value) {
-        if (value == null || value == "") {
-          return "Must have a password!";
-        }
-        return null; // ok
-      },
-    );
-  }
-}
-
-class UnsavedChangesBar extends StatefulWidget {
-  const UnsavedChangesBar({
-    super.key,
-    required this.theme,
-    required this.initialValue,
-  });
-
-  final ThemeData theme;
-  final bool Function() initialValue;
-
-  @override
-  State<UnsavedChangesBar> createState() => _UnsavedChangesBarState();
-}
-
-class _UnsavedChangesBarState extends State<UnsavedChangesBar> {
-
-  _UnsavedChangesBarState();
-
-  bool unsavedChanges = false;
-
-
-  @override
-  void initState() {
-    super.initState();
-    unsavedChanges = widget.initialValue();
-  }
-
-  void setUnsavedChanges(bool unsavedChanges) {
-    setState(() {
-      this.unsavedChanges = unsavedChanges;
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-    appState._unsavedChangesBarState = WeakReference(this);
-    return unsavedChanges ? Card(
-        color: widget.theme.colorScheme.error,
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Row(
-            children: [
-              Icon(Icons.warning_amber_outlined,
-                  color: widget.theme.colorScheme.onError),
-              const SizedBox(width: 10),
-              Text(
-                "Unsaved changes...",
-                style: TextStyle(
-                  color: widget.theme.colorScheme.onError,
-                ),
-              ),
-              const Expanded(child: SizedBox()),
-              IconButton(
-                style: ButtonStyle(
-                  backgroundColor: MaterialStateProperty.all(widget.theme.primaryColorLight),
-                  visualDensity: VisualDensity.compact,
-                ),
-                onPressed: () async {
-                  await appState.saveConfig();
-                  //print("happy with result");
-                },
-                icon: Icon(
-                  Icons.save_outlined,
-                  color: widget.theme.primaryColorDark,
-                ),
-              ),
-/*              ElevatedButton.icon(
-                style: ButtonStyle(
-                  backgroundColor: MaterialStateProperty.all(
-                      widget.theme.primaryColorLight),
-                  visualDensity: VisualDensity.comfortable,
-                ),
-                onPressed: () {
-                  appState.saveConfig();
-                },
-                label: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return Text(
-                      "",//constraints.maxWidth > 1900 ? "Save" : "",
-                      style: TextStyle(
-                        color: widget.theme.primaryColorDark,
-                      ),
-                    );
-                  }
-                ),
-                icon: Icon(
-                  Icons.save_outlined,
-                  color: widget.theme.primaryColorDark,
-                ),
-              ),*/
-            ],
-          ),
-        )
-    ) : const SizedBox();
-  }
-}
-
-class ConfigCard extends StatelessWidget {
-  const ConfigCard({
-    super.key,
-    required this.theme,
-    required this.label,
-    required this.onChanged,
-    this.keyBoardType,
-    this.initialValue,
-    this.formKey,
-  });
-
-  final ThemeData theme;
-  final String label;
-  final void Function(String) onChanged;
-  final TextInputType? keyBoardType;
-  final String? initialValue;
-  final Key? formKey;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      color: theme.colorScheme.primaryContainer,
-      child: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: TextFormField(
-            key: formKey,
-            decoration: InputDecoration(
-              border: const UnderlineInputBorder(),
-              labelText: label,
-              labelStyle: TextStyle(
-                color: theme.colorScheme.onPrimaryContainer,
-              ),
-            ),
-            keyboardType: keyBoardType,
-            onChanged: onChanged,
-            initialValue: initialValue,
-          )
-      ),
-    );
   }
 }
