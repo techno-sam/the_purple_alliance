@@ -60,6 +60,150 @@ class MyApp extends StatelessWidget {
   }
 }
 
+
+Future<String> get _localPath async {
+  final directory = await getApplicationDocumentsDirectory();
+
+  return "${directory.path}/the_purple_alliance";
+}
+
+Future<File> get _configFile async {
+  final path = await _localPath;
+  await Directory(path).create(recursive: true);
+  return File('$path/config.json');
+}
+
+Future<File> get _searchFile async {
+  final path = await _localPath;
+  await Directory(path).create(recursive: true);
+  return File('$path/search.json');
+}
+
+Future<File> get _dataFile async {
+  final path = await _localPath;
+  await Directory(path).create(recursive: true);
+  return File('$path/data.json');
+}
+
+Future<File> get _schemeFile async {
+  final path = await _localPath;
+  await Directory(path).create(recursive: true);
+  return File('$path/scheme.json');
+}
+
+Future<File> get _cachedServerMetaFile async {
+  final path = await _localPath;
+  await Directory(path).create(recursive: true);
+  return File('$path/server_meta.json');
+}
+
+Future<Object?> readJsonFile(Future<File> file) async {
+  try {
+    File f = await file;
+    if (kDebugMode) {
+      log("reading $f");
+    }
+    final contents = await f.readAsString();
+    if (kDebugMode) {
+      log("contents: $contents");
+    }
+    return await compute(jsonDecode, contents);
+  } catch (e) {
+    log('$e');
+    return null;
+  }
+}
+
+Future<File?> writeJsonFile(FutureOr<File> file, Object? data) async {
+  try {
+    final f = await file;
+    String contents;
+    if (data != null) {
+      contents = jsonEncode(data);
+    } else {
+      contents = "";
+    }
+    return await f.writeAsString(contents);
+  } catch (e) {
+    log('Error in writeJsonFile: $e');
+    return Future.value(file);
+  }
+}
+
+Future<Map<String, dynamic>> readConfig() async {
+  log("reading config...");
+  var config = await readJsonFile(_configFile);
+  if (config is Map<String, dynamic>) {
+    return config;
+  } else {
+    return {};
+  }
+}
+
+Future<File?> writeConfig(Map<String, dynamic> data) async {
+  return await compute2(writeJsonFile, await _configFile, data);
+}
+
+Future<Map<String, Map<String, dynamic>>?> get _previousSearchConfigurations async {
+  Map<String, Map<String, dynamic>> out = {};
+  var previousData = await readJsonFile(_searchFile);
+  if (previousData is Map<String, dynamic>) {
+    for (var entry in previousData.entries) {
+      if (entry.value is Map<String, dynamic>) {
+        out[entry.key] = entry.value;
+      }
+    }
+    return out;
+  } else {
+    return null;
+  }
+}
+
+Future<File?> _setPreviousSearchConfigurations(Map<String, Map<String, dynamic>>? data) async {
+  return await compute2(writeJsonFile, await _searchFile, data ?? {});
+}
+
+Future<Map<String, dynamic>?> get _previousData async {
+  var previousData = await readJsonFile(_dataFile);
+  if (previousData is Map<String, dynamic>) {
+    return previousData;
+  } else {
+    return null;
+  }
+}
+
+Future<File?> _setPreviousData(Map<String, dynamic>? data) async {
+  return await compute2(writeJsonFile, await _dataFile, data ?? {});
+}
+
+Future<List<dynamic>?> get _cachedScheme async {
+  var cachedScheme = await readJsonFile(_schemeFile);
+  if (cachedScheme is List<dynamic>) {
+    return cachedScheme;
+  } else {
+    return null;
+  }
+}
+
+Future<File?> _setCachedScheme(List<dynamic>? data) async {
+  return await compute2(writeJsonFile, await _schemeFile, data);
+}
+
+Future<File?> _setCachedServerMeta(Map<String, dynamic>? data) async {
+  return await compute2(writeJsonFile, await _cachedServerMetaFile, data);
+}
+
+Future<Map<String, dynamic>?> get _cachedServerMeta async {
+  var cachedServerMeta = await readJsonFile(_cachedServerMetaFile);
+  if (cachedServerMeta is Map<String, dynamic>) {
+    return cachedServerMeta;
+  } else {
+    return null;
+  }
+}
+
+
+
 class MyAppState extends ChangeNotifier {
   Map<String, Map<String, dynamic>> searchConfigurations = {};
   String? _currentSearchConfiguration;
@@ -88,120 +232,12 @@ class MyAppState extends ChangeNotifier {
       }
     }
   }
-  var current = WordPair.random();
 
   WeakReference<UnsavedChangesBarState>? unsavedChangesBarState;
-
-  void getNext() {
-    current = WordPair.random();
-    notifyListeners();
-  }
-
-  var favorites = <WordPair>{};
-
-  void toggleFavorite() {
-    if (favorites.contains(current)) {
-      favorites.remove(current);
-    } else {
-      favorites.add(current);
-    }
-    notifyListeners();
-  }
 
   bool gridMode = true;
   
   late final ImageSyncManager imageSyncManager = ImageSyncManager(() => httpClient, () => imageSyncMode, () => builder?.currentTeam, () => locked);
-
-  Future<String> get _localPath async {
-    final directory = await getApplicationDocumentsDirectory();
-
-    return "${directory.path}/the_purple_alliance";
-  }
-
-  Future<File> get _configFile async {
-    final path = await _localPath;
-    await Directory(path).create(recursive: true);
-    return File('$path/config.json');
-  }
-
-  Future<File> get _searchFile async {
-    final path = await _localPath;
-    await Directory(path).create(recursive: true);
-    return File('$path/search.json');
-  }
-
-  Future<File> get _dataFile async {
-    final path = await _localPath;
-    await Directory(path).create(recursive: true);
-    return File('$path/data.json');
-  }
-
-  Future<File> get _schemeFile async {
-    final path = await _localPath;
-    await Directory(path).create(recursive: true);
-    return File('$path/scheme.json');
-  }
-  
-  Future<File> get _cachedServerMetaFile async {
-    final path = await _localPath;
-    await Directory(path).create(recursive: true);
-    return File('$path/server_meta.json');
-  }
-
-  Future<Object?> readJsonFile(Future<File> file) async {
-    try {
-      File f = await file;
-      if (kDebugMode) {
-        log("reading $f");
-      }
-      final contents = await f.readAsString();
-      if (kDebugMode) {
-        log("contents: $contents");
-      }
-      return await compute(jsonDecode, contents);
-    } catch (e) {
-      log('$e');
-      return null;
-    }
-  }
-
-  static Future<File?> writeJsonFile(FutureOr<File> file, Object? data) async {
-//    print("start of write json file");
-    try {
-//      print("about to await file");
-      final f = await file;
-//      print("got file");
-      String contents;
-      if (data != null) {
-        contents = jsonEncode(data);
-      } else {
-        contents = "";
-      }
-//      print("ready to write contents: $contents");
-      return await f.writeAsString(contents);
-    } catch (e) {
-      log('Error in writeJsonFile: $e');
-      return Future.value(file);
-    }
-  }
-
-  Future<Map<String, dynamic>> readConfig() async {
-    log("reading config...");
-    var config = await readJsonFile(_configFile);
-    if (config is Map<String, dynamic>) {
-      return config;
-    } else {
-      return {};
-    }
-  }
-
-  Future<File?> writeConfig(Map<String, dynamic> data) async {
-/*    return await compute((List<dynamic> args) async {
-      return await writeJsonFile(args[0], args[1]);
-    }, [_configFile, data]);*/
-    return await compute2(writeJsonFile, await _configFile, data);
-//    return await writeJsonFile(_configFile, data);
-  }
 
   Future<File?> saveConfig() async {
     return await writeConfig(_config).then(
@@ -390,72 +426,6 @@ class MyAppState extends ChangeNotifier {
     }
     return true;
   }
-
-  Future<Map<String, Map<String, dynamic>>?> get _previousSearchConfigurations async {
-    Map<String, Map<String, dynamic>> out = {};
-    var previousData = await readJsonFile(_searchFile);
-    if (previousData is Map<String, dynamic>) {
-      for (var entry in previousData.entries) {
-        if (entry.value is Map<String, dynamic>) {
-          out[entry.key] = entry.value;
-        }
-      }
-      return out;
-    } else {
-      return null;
-    }
-  }
-
-  Future<File?> _setPreviousSearchConfigurations(Map<String, Map<String, dynamic>>? data) async {
-    return await compute2(writeJsonFile, await _searchFile, data ?? {});
-  }
-
-  Future<Map<String, dynamic>?> get _previousData async {
-    var previousData = await readJsonFile(_dataFile);
-    if (previousData is Map<String, dynamic>) {
-      return previousData;
-    } else {
-      return null;
-    }
-  }
-
-  Future<File?> _setPreviousData(Map<String, dynamic>? data) async {
-    return await compute2(writeJsonFile, await _dataFile, data ?? {});
-  }
-
-  Future<List<dynamic>?> get _cachedScheme async {
-    var cachedScheme = await readJsonFile(_schemeFile);
-    if (cachedScheme is List<dynamic>) {
-      return cachedScheme;
-    } else {
-      return null;
-    }
-  }
-
-  Future<File?> _setCachedScheme(List<dynamic>? data) async {
-/*    return await compute((List<dynamic> args) async {
-      return await writeJsonFile(args[0], args[1]);
-    }, [_schemeFile, data]);*/
-    return await compute2(writeJsonFile, await _schemeFile, data);
-//    return await writeJsonFile(_schemeFile, data);
-  }
-  
-  Future<File?> _setCachedServerMeta(Map<String, dynamic>? data) async {
-/*    return await compute((List<dynamic> args) async {
-      return await writeJsonFile(args[0], args[1]);
-    }, [_cachedServerMetaFile, data]);*/
-    return await compute2(writeJsonFile, await _cachedServerMetaFile, data);
-//    return await writeJsonFile(_cachedServerMetaFile, data);
-  }
-  
-  Future<Map<String, dynamic>?> get _cachedServerMeta async {
-    var cachedServerMeta = await readJsonFile(_cachedServerMetaFile);
-    if (cachedServerMeta is Map<String, dynamic>) {
-      return cachedServerMeta;
-    } else {
-      return null;
-    }
-  }
   
   Future<Map<String, dynamic>> getServerMeta() async {
     return await compute(network.getServerMeta, httpClient);
@@ -464,27 +434,6 @@ class MyAppState extends ChangeNotifier {
   Future<List<dynamic>> getScheme() async {
     log("Fetching scheme...");
     return await compute(network.getScheme, httpClient);
-    /*return [
-      {
-        "type": "text",
-        "label": "A cool label",
-        "padding": 8.0
-      },
-      {
-        "type": "text",
-        "label": "Another cool label"
-      },
-      {
-        "type": "text_field",
-        "label": "A cool form entry",
-        "key": "test"
-      },
-      {
-        "type": "text",
-        "label": "A totally different label",
-        "padding": 20.0
-      }
-    ];*/
   }
 
   network.Connection get httpClient {
