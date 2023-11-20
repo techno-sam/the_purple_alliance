@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
 
@@ -71,3 +72,9 @@ extension MapExtension<K, V> on Map<K, V> {
     return this[key];
   }
 }
+
+double roundDouble(double value, int places){
+  num mod = pow(10.0, places);
+  return ((value * mod).round().toDouble() / mod);
+}
+

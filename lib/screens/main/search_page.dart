@@ -2,7 +2,7 @@ import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/state/data_manager.dart';
-import 'package:the_purple_alliance/widgets/scouting_elements/scouting_layout.dart';
+import 'package:the_purple_alliance/widgets/scouting/scouting_layout.dart';
 import 'package:the_purple_alliance/state/search_system.dart';
 
 import '../../main.dart';

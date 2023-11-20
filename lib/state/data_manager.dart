@@ -10,7 +10,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:the_purple_alliance/state/network.dart';
 import 'package:the_purple_alliance/state/search_system.dart';
 import 'package:the_purple_alliance/utils/util.dart';
-import 'package:the_purple_alliance/widgets/widgets.dart';
+import 'package:the_purple_alliance/widgets/image_sync_selector.dart';
 import 'package:uuid/uuid.dart';
 
 final Map<Type, DataValue Function(Map<String, dynamic>)> _valueTypes = {};

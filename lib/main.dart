@@ -14,13 +14,17 @@ import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:the_purple_alliance/navigation/color_adaptive_scaffold.dart';
 import 'package:the_purple_alliance/state/data_manager.dart';
-import 'package:the_purple_alliance/screens/main_pages/search_page.dart';
+import 'package:the_purple_alliance/widgets/display_card.dart';
+import 'package:the_purple_alliance/widgets/image_sync_selector.dart';
+import 'package:the_purple_alliance/widgets/scouting/scouting_layout.dart';
 
-import 'package:the_purple_alliance/widgets/widgets.dart';
-import 'package:the_purple_alliance/widgets/scouting_elements/scouting_layout.dart';
 import 'package:the_purple_alliance/state/network.dart' as network;
 import 'package:the_purple_alliance/utils/util.dart';
+import 'package:the_purple_alliance/widgets/sync_time_selector.dart';
+
+import 'screens/main/search_page.dart';
 
 
 void main() {
@@ -1036,153 +1040,6 @@ class _MyHomePageState extends State<MyHomePage> {
         ),
       ),
     );
-    /*return LayoutBuilder(
-        builder: (context, constraints) {
-          return Scaffold(
-            body: Row(
-              children: [
-                SafeArea(
-                  child: NavigationRail(
-                    backgroundColor: appState.teamColorReminder ? (appState.teamColorBlue ? Colors.blue.shade600 : Colors.red.shade600) : null,
-                    extended: constraints.maxWidth >= 600,
-                    destinations: [
-                      const NavigationRailDestination(
-                        icon: Icon(Icons.home),
-                        label: Text('Home'),
-                      ),
-                      const NavigationRailDestination(
-                        icon: Icon(Icons.favorite),
-                        label: Text('Favorites'),
-                      ),
-                      const NavigationRailDestination(
-                        icon: Icon(Icons.list),
-                        label: Text('Teams'),
-                      ),
-                      const NavigationRailDestination(
-                        icon: Icon(Icons.local_fire_department),
-                        label: Text('Experiments'),
-                      ),
-                      const NavigationRailDestination(
-                        icon: Icon(Icons.settings),
-                        label: Text('Settings'),
-                      ),
-                      if (appState.teamColorReminder)
-                        const NavigationRailDestination(
-                            icon: Icon(Icons.invert_colors),
-                            label: Text('Switch color')
-                        ),
-                    ],
-                    selectedIndex: selectedIndex,
-                    onDestinationSelected: (value) async {
-                      if (value == Pages.values.length) { // last item isn't actually a page, but a selector
-                        appState.teamColorBlue = !appState.teamColorBlue;
-                        await appState.saveConfig();
-                      } else {
-                        setState(() {
-                          if (selectedIndex != value && selectedIndex == Pages.settings.index && appState._unsavedChanges) { //if we're leaving the settings page, save the config
-                            appState.saveConfig().then((_) {
-                              setState(() {
-                                selectedIndex = value;
-                              });
-                            });
-                          } else {
-                            selectedIndex = value;
-                          }
-                        });
-                      }
-                    },
-                  ),
-                ), /*
-              SizedBox(
-                width: 15,
-                child: Container(
-                  color: Colors.red,
-                ),
-              ),// */
-                Expanded(
-                  child: Container(
-                    color: Theme
-                        .of(context)
-                        .colorScheme
-                        .primaryContainer,
-                    child: page,
-                  ),
-                ),
-              ],
-            ),
-            // if we are on the settings page, don't display the floating buttons
-            floatingActionButton: selectedPage == Pages.settings ? null : Row(
-              mainAxisSize: MainAxisSize.min,
-              mainAxisAlignment: MainAxisAlignment.end,
-              children: ["Add Team"
-                FloatingActionButton(
-                  onPressed: appState.runSynchronization,
-                  tooltip: "Synchronize data with server",
-                  child: const Icon(
-                    Icons.sync_alt,
-                  ),
-                ),
-                const SizedBox(width: 10),
-                FloatingActionButton(
-                  onPressed: () async {
-                    await appState.runSave(manual: true);
-                  },
-                  tooltip: "Save local data",
-                  child: const Icon(
-                    Icons.save_outlined,
-                  ),
-                ),
-              ],
-            ),
-          );
-        }
-    );*/
-  }
-}
-
-class GeneratorPage extends StatelessWidget {
-  const GeneratorPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    var appState = context.watch<MyAppState>();
-    var pair = appState.current;
-
-    IconData icon;
-    if (appState.favorites.contains(pair)) {
-      icon = Icons.favorite;
-    } else {
-      icon = Icons.favorite_border;
-    }
-
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          BigCard(pair: pair),
-          const SizedBox(height: 10),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              ElevatedButton.icon(
-                onPressed: () {
-                  appState.toggleFavorite();
-                },
-                icon: Icon(icon),
-                label: const Text('Like'),
-              ),
-              const SizedBox(width: 10),
-              ElevatedButton(
-                onPressed: () {
-                  appState.getNext();
-                },
-                child: const Text('Next'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
   }
 }
 
@@ -1919,72 +1776,6 @@ class SettingsPage extends StatelessWidget {
   }
 }
 
-class TestCameraPage extends StatefulWidget {
-  const TestCameraPage({super.key});
-
-  @override
-  State<TestCameraPage> createState() => _TestCameraPageState();
-}
-
-class _TestCameraPageState extends State<TestCameraPage> {
-  late CameraDescription _cameraDescription;
-  final List<String> _images = [];
-
-  @override
-  void initState() {
-    super.initState();
-    availableCameras().then((cameras) {
-      final camera = cameras
-          //.where((camera) => camera.lensDirection == CameraLensDirection.back)
-          .toList()
-          .first;
-      setState(() {
-        _cameraDescription = camera;
-      });
-      log("Setup camera");
-    }).catchError((err) {
-      log(err);
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.only(top: 20.0, bottom: 20.0),
-        child: Column(
-          children: [
-            const Text("Camera test"),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 10.0),
-              height: 400,
-              child: ListView(
-                scrollDirection: Axis.horizontal,
-                children: [
-                  CardPicture(
-                    onTap: () async {
-                      final String? imagePath = await Navigator.of(context)
-                          .push(MaterialPageRoute(
-                          builder: (_) => TakePhoto(camera: _cameraDescription)
-                      ));
-                      log("imagePath: $imagePath");
-                      if (imagePath != null) {
-                        setState(() {
-                          _images.add(imagePath);
-                        });
-                      }
-                    }
-                  )
-                ] + _images.map((String path) => CardPicture(imagePath: path)).toList()
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
 class SimplePasswordFormField extends StatefulWidget {
   const SimplePasswordFormField({
     super.key,
@@ -2181,36 +1972,6 @@ class ConfigCard extends StatelessWidget {
             onChanged: onChanged,
             initialValue: initialValue,
           )
-      ),
-    );
-  }
-}
-
-
-class BigCard extends StatelessWidget {
-  const BigCard({
-    super.key,
-    required this.pair,
-  });
-
-  final WordPair pair;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final style = theme.textTheme.displayMedium!.copyWith(
-      color: theme.colorScheme.onPrimary,
-    );
-
-    return Card(
-      color: theme.colorScheme.primary,
-      child: Padding(
-        padding: const EdgeInsets.all(20.0),
-        child: Text(
-          pair.asLowerCase,
-          style: style,
-          semanticsLabel: "${pair.first} ${pair.second}",
-        ),
       ),
     );
   }
