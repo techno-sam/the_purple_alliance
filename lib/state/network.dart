@@ -8,8 +8,9 @@ import 'package:http/http.dart' as http;
 import 'package:http_auth/http_auth.dart' as http_auth;
 import 'package:http_parser/http_parser.dart' as http_parser;
 import 'package:crypto/crypto.dart' as crypto;
-import 'package:the_purple_alliance/state/data_manager.dart';
 import 'package:the_purple_alliance/utils/util.dart';
+
+import 'images/image_record.dart';
 
 String sha256Hash(Uint8List data) {
   var digest = crypto.sha256.convert(data).toString();

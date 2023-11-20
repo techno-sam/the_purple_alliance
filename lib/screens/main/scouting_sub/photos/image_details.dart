@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:the_purple_alliance/screens/main/scouting_sub/photos/team_photo_page.dart';
 
-import 'package:the_purple_alliance/state/data_manager.dart';
+import 'package:the_purple_alliance/state/images/image_record.dart';
+import 'package:the_purple_alliance/state/images/image_sync_manager.dart';
+
+import 'team_photo_page.dart';
 
 class ImageDetailsPage extends StatelessWidget {
   ImageDetailsPage({

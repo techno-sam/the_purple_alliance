@@ -3,17 +3,19 @@ import 'dart:developer';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:the_purple_alliance/main.dart';
 import 'package:camera/camera.dart';
-import 'package:the_purple_alliance/screens/main/scouting_sub/photos/photo_meta.dart';
-import 'package:the_purple_alliance/screens/main/scouting_sub/photos/take_photo.dart';
 
+import 'package:the_purple_alliance/main.dart';
+import 'package:the_purple_alliance/state/images/image_record.dart';
+import 'package:the_purple_alliance/state/images/image_sync_manager.dart';
 import 'package:the_purple_alliance/utils/util.dart';
-import 'package:the_purple_alliance/state/data_manager.dart';
 import 'package:the_purple_alliance/widgets/team_photos/camera_card.dart';
 import 'package:the_purple_alliance/widgets/team_photos/camera_tile.dart';
 import 'package:the_purple_alliance/widgets/team_photos/image_card.dart';
 import 'package:the_purple_alliance/widgets/team_photos/image_tile.dart';
+
+import 'photo_meta.dart';
+import 'take_photo.dart';
 
 
 const Set<PointerDeviceKind> extendedScrollableTypes = <PointerDeviceKind>{

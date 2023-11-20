@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 Future<R> compute2<R, A, B>(FutureOr<R> Function(A, B) callback, A arg1, B arg2) async {
   //log("Compute2 with arg types: ${callback.runtimeType}, ${arg1.runtimeType}, ${arg2.runtimeType}");
@@ -89,4 +90,12 @@ String? verifyServerUrl(String url) {
     return "Invalid scheme for server: ${tmp.scheme.isEmpty ? "[Blank]" : tmp.scheme}. Must be 'https'.";
   }
   return null;
+}
+
+int generateTimestamp() {
+  return DateTime.now().toUtc().millisecondsSinceEpoch;
+}
+
+String makeUUID() {
+  return const Uuid().v4().replaceAll("-", "").replaceAll("_", "");
 }

@@ -1,9 +1,11 @@
 import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:the_purple_alliance/state/data_manager.dart';
-import 'package:the_purple_alliance/widgets/scouting/scouting_layout.dart';
+import 'package:the_purple_alliance/widgets/scouting/builders/abstract_synchronized_builder.dart';
 import 'package:the_purple_alliance/state/search_system.dart';
+import 'package:the_purple_alliance/widgets/search/rankings_dialog.dart';
+import 'package:the_purple_alliance/widgets/search/search_configuration_selection.dart';
+import 'package:the_purple_alliance/widgets/search/search_field_picker_dialog.dart';
 
 import '../../main.dart';
 
@@ -128,13 +130,13 @@ class _SearchPageState extends State<SearchPage> {
               if (appState.searchValues != null)
               ElevatedButton.icon(
                 onPressed: () {
-                  var teamDataManager = appState.builder?.teamManager;
+                  var teamDataManager = appState.builder?.allManagers;
                   if (teamDataManager != null && appState.searchValues != null) {
                     List<int> rankedTeams = teamDataManager.getRankedTeams(appState.searchValues!);
                     //print(rankedTeams);
                     showDialog(context: context, builder: (context) {
                       final theme = Theme.of(context);
-                      return RankingsDialog(theme: theme, rankedTeams: rankedTeams, teamDataManager: teamDataManager, appState: appState);
+                      return RankingsDialog(theme: theme, rankedTeams: rankedTeams, dataManagers: teamDataManager, appState: appState);
                     });
                   }
                 },
@@ -145,219 +147,6 @@ class _SearchPageState extends State<SearchPage> {
           )
         ],
       )
-    );
-  }
-}
-
-class RankingsDialog extends StatelessWidget {
-  const RankingsDialog({
-    super.key,
-    required this.theme,
-    required this.rankedTeams,
-    required this.teamDataManager,
-    required this.appState,
-  });
-
-  final ThemeData theme;
-  final List<int> rankedTeams;
-  final TeamDataManager teamDataManager;
-  final MyAppState appState;
-
-  @override
-  Widget build(BuildContext context) {
-    return Dialog(
-      child: IntrinsicWidth(
-        stepWidth: 56.0,
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(minWidth: 280.0),
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(0.0, 12.0, 0.0, 16.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  "Ranked Teams",
-                  style: theme.textTheme.headlineSmall,
-                ),
-                Flexible(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        for (int i = 0; i < rankedTeams.length; i++)
-                          Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 1.0, horizontal: 8.0),
-                            child: Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(8.0),
-                                child: Row(
-                                  children: [
-                                    Text("${i + 1}."),
-                                    const SizedBox(width: 10),
-                                    Text(
-                                      "${rankedTeams[i]}",
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    Text(" - ${teamDataManager.getTeamName(rankedTeams[i])}"),
-                                    const Expanded(child: SizedBox()),
-                                    Text(" ${teamDataManager.getManager(rankedTeams[i]).getSearchRanking(appState.searchValues!).map((v, max) => '$v/$max')}")
-                                  ],
-                                )
-                              ),
-                            ),
-                          )
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class SearchFieldPickerDialog extends StatelessWidget {
-  const SearchFieldPickerDialog({
-    super.key,
-    required this.builders,
-    required this.appState,
-    required this.theme,
-  });
-
-  final List<SynchronizedBuilder<DataValue>> builders;
-  final MyAppState appState;
-  final ThemeData theme;
-
-  @override
-  Widget build(BuildContext context) {
-    return SimpleDialog(
-      title: const Text("Pick Field"),
-      children: [
-        Center(
-          child: SingleChildScrollView(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0),
-              child: Column(
-                children: [
-                  for (int i = 0; i < builders.length; i++)
-                    if (!(appState.searchValues?.containsKey(builders[i].key) == true))
-                    Card(
-                      elevation: 2,
-                      child: InkWell(
-                        customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
-                        onTap: () {
-                          Navigator.pop(context, builders[i].key);
-                        },
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Icon(builders[i].icon),
-                              Text(builders[i].label)
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          )
-        ),
-        const SizedBox(height: 10),
-        Center(
-          child: ElevatedButton.icon(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            icon: const Icon(Icons.cancel),
-            label: const Text("Cancel"),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class SearchConfigurationSelection extends StatelessWidget {
-  const SearchConfigurationSelection({
-    super.key,
-    required this.appState,
-    required this.theme,
-    required this.nameKey,
-  });
-
-  final MyAppState appState;
-  final ThemeData theme;
-  final GlobalKey<FormFieldState<String>> nameKey;
-
-  @override
-  Widget build(BuildContext context) {
-    return SimpleDialog(
-      title: const Text("Select search configuration"),
-      children: [
-        SizedBox(
-          height: 350,
-          child: SingleChildScrollView(
-            child: Column(
-              children: [
-                for (String conf in appState.searchConfigurations.keys)
-                  Card(
-                    elevation: 2,
-                    child: InkWell(
-                      customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
-                      onTap: () {
-                        Navigator.pop(context, conf);
-                      },
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-                        child: Text(conf),
-                      ),
-                    )
-                  )
-              ],
-            ),
-          ),
-        ),
-        Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              SizedBox(
-                width: 200,
-                child: TextFormField(
-                  key: nameKey,
-                  decoration: InputDecoration(
-                    border: const OutlineInputBorder(),
-                    labelText: "Name",
-                    labelStyle: TextStyle(
-                      color: theme.colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Tooltip(
-                message: "New",
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context, nameKey.currentState?.value);
-                  },
-                  icon: const Icon(Icons.add),
-                  label: getWindowType(context) >= AdaptiveWindowType.medium ? const Text("New") : const SizedBox(),
-                ),
-              )
-            ],
-          ),
-        )
-      ],
     );
   }
 }

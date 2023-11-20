@@ -5,7 +5,8 @@ import 'package:provider/provider.dart';
 
 import 'package:the_purple_alliance/screens/main/scouting_sub/photos/image_details.dart';
 import 'package:the_purple_alliance/main.dart';
-import 'package:the_purple_alliance/state/data_manager.dart';
+import 'package:the_purple_alliance/state/images/image_record.dart';
+import 'package:the_purple_alliance/state/images/image_sync_manager.dart';
 
 class ImageCard extends StatefulWidget {
   final String hash;

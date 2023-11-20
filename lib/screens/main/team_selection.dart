@@ -19,7 +19,7 @@ class TeamSelectionPage extends StatelessWidget {
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
     final theme = Theme.of(context);
-    List<int> teams = appState.builder?.teamManager.managers.keys.toList() ?? [];
+    List<int> teams = appState.builder?.allManagers.managers.keys.toList() ?? [];
     teams.sort();
     return Padding(
       padding: const EdgeInsets.all(8.0),

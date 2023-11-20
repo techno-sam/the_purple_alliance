@@ -10,7 +10,7 @@ import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
 
 import 'package:the_purple_alliance/screens/main/main_page.dart';
-import 'package:the_purple_alliance/state/data_manager.dart';
+import 'package:the_purple_alliance/state/images/image_sync_manager.dart';
 import 'package:the_purple_alliance/widgets/image_sync_selector.dart';
 import 'package:the_purple_alliance/widgets/scouting/scouting_layout.dart';
 import 'package:the_purple_alliance/state/network.dart' as network;
@@ -299,7 +299,7 @@ class MyAppState extends ChangeNotifier {
   }
   int? _teamNumber;
   String? serverUrl;
-  ExperimentBuilder? builder;
+  ScoutingBuilder? builder;
 
   String? _error;
 
@@ -656,7 +656,7 @@ class MyAppState extends ChangeNotifier {
       await _previousData.then((v) {
         if (v != null) {
           builder?.initializeValues(v.keys);
-          builder?.teamManager.load(v, true);
+          builder?.allManagers.load(v, true);
         }
       });
       await _previousSearchConfigurations.then((v) {
@@ -683,7 +683,7 @@ class MyAppState extends ChangeNotifier {
   Future<void> unlock() async {
     teamNumberInProgress = _teamNumber ?? 1234;
     serverUrlInProgress = serverUrl ?? "example.com";
-    Future<File?> future = _setPreviousData(builder?.teamManager.save())
+    Future<File?> future = _setPreviousData(builder?.allManagers.save())
         .then((_) async => await imageSyncManager.save())
         .then((_) async => await _setPreviousSearchConfigurations(searchConfigurations));
     builder = null;
@@ -754,8 +754,8 @@ class MyAppState extends ChangeNotifier {
       ));
       return;
     }
-    WordPair pair = WordPair.random();
-    log("Synchronizing... !!! $_minutesSinceLastSync ${pair.asLowerCase}");
+    WordPair syncTrackingPair = WordPair.random();
+    log("Synchronizing... !!! $_minutesSinceLastSync ${syncTrackingPair.asLowerCase}");
     _noSync = true;
     /*******************/
     /* Begin Protected */
@@ -792,15 +792,15 @@ class MyAppState extends ChangeNotifier {
       ));
     }
     try { //1234567890
-      Map<String, dynamic> toServer = builder!.teamManager.saveNetworkDeltas();
+      Map<String, dynamic> toServer = builder!.allManagers.saveNetworkDeltas();
 //      await network.sendDeltas(httpClient, toServer);
       await compute2(network.sendDeltas, httpClient, toServer);
       Map<String, dynamic>? fromServer = await compute(network.getTeamData, httpClient);
-      builder!.teamManager.load(fromServer, false);
+      builder!.allManagers.load(fromServer, false);
       scaffoldKey.currentState?.showSnackBar(const SnackBar(
         content: Text("Synced data with server"),
       ));
-      log(pair.asLowerCase);
+      log(syncTrackingPair.asLowerCase);
     } catch (e) {
       log("Error while synchronizing: $e");
       scaffoldKey.currentState?.showSnackBar(SnackBar(
@@ -848,7 +848,7 @@ class MyAppState extends ChangeNotifier {
       }
       _noSync = true;
       _currentlySaving = true;
-      await _setPreviousData(builder!.teamManager.save());
+      await _setPreviousData(builder!.allManagers.save());
       await imageSyncManager.save();
       await _setPreviousSearchConfigurations(searchConfigurations);
       if (kDebugMode) {
