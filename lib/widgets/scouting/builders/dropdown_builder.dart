@@ -75,7 +75,7 @@ class DropdownWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<Dropdown
                                     //print("now: ${appState.searchValues[_key]}");
                                   }
                                 },
-                                initialValue: "${(appState.searchValues?[key] is Map<String, int>) ? (appState.searchValues?[key][option] ?? "") : ""}",
+                                initialValue: "${(appState.searchValues?[key] is Map<String, int> || (appState.searchValues?[key] is Map<String, dynamic> && appState.searchValues?[key][option] is int)) ? (appState.searchValues?[key][option] ?? "") : ""}",
                               ),
                             ),
                           ],

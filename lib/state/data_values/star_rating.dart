@@ -56,7 +56,7 @@ class StarRatingDataValue extends DataValue with TimestampSpecialBehaviorMixin i
   int getCurrentPoints(dynamic config) => (getMaxPoints(config) * (averageValue ?? 0) / 5).floor();
 
   @override
-  int getMaxPoints(dynamic config) => averageValue == null ? 0 : config as int;
+  int getMaxPoints(dynamic config) => config is int ? (averageValue == null ? 0 : config) : 0;
 
   @override
   int get defaultConfig => 0;

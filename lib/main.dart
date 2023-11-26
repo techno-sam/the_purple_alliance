@@ -289,6 +289,7 @@ class MyAppState extends ChangeNotifier {
     bool success2 = config.setServer(config.serverUrlInProgress, _configPrivateKey);
     if (success1 && success2) {
       config.locked = true;
+      notifyListeners();
       log("Connecting with team_number: ${config.teamNumber}, url: ${config.serverUrl}");
     } else {
       log("Failed to connect (${config.error})");

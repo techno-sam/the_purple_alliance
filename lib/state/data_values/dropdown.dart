@@ -1,7 +1,7 @@
 import '../search_system.dart';
 import 'abstract_data_value.dart';
 
-int max(Iterable<int> nums) {
+int max(Iterable<dynamic> nums) {
   int v = nums.isEmpty ? 0 : nums.first;
   for (int num in nums) {
     if (num > v) {
@@ -75,12 +75,15 @@ class DropdownDataValue extends DataValue implements SearchDataEmitter {
   }
 
   @override
-  int getCurrentPoints(dynamic config) => (config as Map<String, int>)[value] ?? 0;
+  int getCurrentPoints(dynamic config) => (config is Map<String, int> || (config is Map<String, dynamic> && config[value] is int)) ? config[value] ?? 0 : 0;
 
   @override
   int getMaxPoints(dynamic config) {
-    Map<String, int> confMap = config as Map<String, int>;
-    return confMap.containsKey(value) ? max(confMap.values) : 0;
+    if (config is Map<String, int> || (config is Map<String, dynamic> && config[value] is int)) {
+      return config.containsKey(value) ? max(config.values) : 0;
+    } else {
+      return 0;
+    }
   }
 
   @override
