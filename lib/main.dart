@@ -230,8 +230,21 @@ class MyAppState extends ChangeNotifier {
     return await compute(network.getScheme, httpClient);
   }
 
+  String __lastServerUrl = "???";
+  String __lastUsername = "???";
+  String __lastPassword = "???";
+  network.Connection? __cachedClient;
   network.Connection get httpClient {
-    return network.Connection(config.serverUrl ?? "https://example.com", config.username, config.password);
+    String url = config.serverUrl ?? "https://example.com";
+    String username = config.username;
+    String password = config.password;
+    if (__cachedClient == null || __lastServerUrl != url || __lastUsername != username || __lastPassword != password) {
+      __cachedClient = network.Connection(url, username, password);
+      __lastServerUrl = url;
+      __lastUsername = username;
+      __lastPassword = password;
+    }
+    return __cachedClient!;
   }
 
   bool checkedCompetition = false; // keep track of whether we've checked what competition we are at yet. if we haven't checked yet, we don't want to send bad data.
