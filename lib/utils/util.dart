@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 
 Future<R> compute2<R, A, B>(FutureOr<R> Function(A, B) callback, A arg1, B arg2) async {
   //log("Compute2 with arg types: ${callback.runtimeType}, ${arg1.runtimeType}, ${arg2.runtimeType}");
@@ -70,4 +72,30 @@ extension MapExtension<K, V> on Map<K, V> {
   V? get(K key) {
     return this[key];
   }
+}
+
+double roundDouble(double value, int places){
+  num mod = pow(10.0, places);
+  return ((value * mod).round().toDouble() / mod);
+}
+
+
+/// Returns the problem with the url if there is one, or null if the url is OK
+String? verifyServerUrl(String url) {
+  var tmp = Uri.tryParse(url);
+  if (tmp == null) {
+    return "Failed to parse url";
+  }
+  if (!tmp.isScheme("https")) { //just don't verify scheme temporarily
+    return "Invalid scheme for server: ${tmp.scheme.isEmpty ? "[Blank]" : tmp.scheme}. Must be 'https'.";
+  }
+  return null;
+}
+
+int generateTimestamp() {
+  return DateTime.now().toUtc().millisecondsSinceEpoch;
+}
+
+String makeUUID() {
+  return const Uuid().v4().replaceAll("-", "").replaceAll("_", "");
 }

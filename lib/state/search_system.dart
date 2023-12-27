@@ -1,6 +1,8 @@
-import 'package:the_purple_alliance/util.dart';
+import 'package:the_purple_alliance/utils/util.dart';
 
-import 'data_manager.dart';
+import 'all_data_managers.dart';
+import 'data_values/abstract_data_value.dart';
+import 'team_specific_data_manager.dart';
 
 abstract class SearchDataEmitter {
   int getMaxPoints(dynamic config);
@@ -8,7 +10,7 @@ abstract class SearchDataEmitter {
   dynamic get defaultConfig;
 }
 
-extension RankableDataManager on DataManager {
+extension RankableDataManager on TeamSpecificDataManager {
   /*
   (points, maxPoints)
    */
@@ -34,7 +36,7 @@ extension RankableDataManager on DataManager {
   }
 }
 
-extension RankableTeamDataManager on TeamDataManager {
+extension RankableTeamDataManager on AllDataManagers {
   /// 1st item is best team,
   /// 2nd item is 2nd best team,
   /// nth item is nth best team
