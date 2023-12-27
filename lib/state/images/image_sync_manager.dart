@@ -7,7 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:image/image.dart';
 import 'package:path_provider/path_provider.dart';
 
-import 'package:the_purple_alliance/state/network.dart';
+import 'package:the_purple_alliance/state/network.dart' show Connection;
 import 'package:the_purple_alliance/utils/util.dart';
 import 'package:the_purple_alliance/widgets/image_sync_selector.dart';
 
@@ -154,31 +154,33 @@ class ImageSyncManager extends ChangeNotifier {
     int? teamNumber = _getSelectedTeam();
     _toDownload.addAll(records.where((element) => mode == ImageSyncMode.all || element.team == teamNumber).map((element) => element.uuid));
   }
+  
+  Future<Triple<List<ImageRecord>, List<String>, List<String>>> _runMetaDownloadInner(Connection connections) async {
+    List<String>? uuids = await connections.getExistingUuids();
+    if (uuids == null) {
+      return Triple.of([], [], []);
+    }
+    List<String> knownUuids = [...uuids]; // just to have a copy
+    List<String> toRemove = [];
+    for (String uuid in _knownImages.map((element) => element.uuid)) { // don't need to fetch existing meta
+      if (uuids.contains(uuid)) {
+        uuids.remove(uuid);
+      } else {
+        toRemove.add(uuid);
+      }
+    }
+    List<ImageRecord> newImg = [];
+    for (String uuid in uuids) {
+      ImageRecord? record = await connections.getImageMeta(uuid);
+      if (record != null) {
+        newImg.add(record);
+      }
+    }
+    return Triple.of(newImg, toRemove, knownUuids);
+  }
 
   Future<void> runMetaDownload(Connection connection) async {
-    Triple<List<ImageRecord>, List<String>, List<String>> data = await compute2((conn, knownImg) async {
-      List<String>? uuids = await compute(getExistingUuids, conn);
-      if (uuids == null) {
-        return Triple.of([], [], []);
-      }
-      var knownUuids = [...uuids]; // just to have a copy
-      List<String> toRemove = [];
-      for (String uuid in knownImg.map((element) => element.uuid)) { // don't need to fetch existing meta
-        if (uuids.contains(uuid)) {
-          uuids.remove(uuid);
-        } else {
-          toRemove.add(uuid);
-        }
-      }
-      List<ImageRecord> newImg = [];
-      for (String uuid in uuids) {
-        ImageRecord? record = await compute2(getImageMeta, conn, uuid);
-        if (record != null) {
-          newImg.add(record);
-        }
-      }
-      return Triple.of(newImg, toRemove, knownUuids);
-    }, connection, _knownImages);
+    Triple<List<ImageRecord>, List<String>, List<String>> data = await _runMetaDownloadInner(connection);
     List<ImageRecord> newImages = data.first;
     List<String> removedUuids = data.second;
     for (String toRemove in removedUuids) {
@@ -202,8 +204,8 @@ class ImageSyncManager extends ChangeNotifier {
   Future<void> runDownload(Connection connection) async { //should be run in timer
     if (_toDownload.isNotEmpty) {
       final String downloadHash = _toDownload.removeAt(0);
-      var imageData = await compute2(getImage, connection, downloadHash);//await getImage(connection, downloadTarget.hash);
-      //var record = await(compute2(getImageMeta, connection, downloadHash));
+      var imageData = await connection.getImage(downloadHash);
+
       if (imageData != null) {
         var file = await getImageFile(downloadHash);
         await file.writeAsBytes(imageData, flush: true);
@@ -268,7 +270,7 @@ class ImageSyncManager extends ChangeNotifier {
           }
           imgData = encodeJpg(decoded, quality: _jpgQuality);
         }
-        await compute3(uploadImage, connection, record, imgData);
+        await connection.uploadImage(record, imgData);
         _serverKnownUuids.add(record.uuid);
       } catch (e) {
         log('Error during upload: $e');

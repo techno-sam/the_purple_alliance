@@ -222,12 +222,12 @@ class MyAppState extends ChangeNotifier {
   
   
   Future<Map<String, dynamic>> getServerMeta() async {
-    return await compute(network.getServerMeta, httpClient);
+    return await httpClient.getServerMeta();
   }
 
   Future<List<dynamic>> getScheme() async {
     log("Fetching scheme...");
-    return await compute(network.getScheme, httpClient);
+    return await httpClient.getScheme();
   }
 
   String __lastServerUrl = "???";
@@ -239,7 +239,9 @@ class MyAppState extends ChangeNotifier {
     String username = config.username;
     String password = config.password;
     if (__cachedClient == null || __lastServerUrl != url || __lastUsername != username || __lastPassword != password) {
-      __cachedClient = network.Connection(url, username, password);
+      __cachedClient?.cleanup();
+
+      __cachedClient = network.Connection.make(url, username, password);
       __lastServerUrl = url;
       __lastUsername = username;
       __lastPassword = password;
@@ -261,7 +263,7 @@ class MyAppState extends ChangeNotifier {
       return checkedCompetition;
     }
     _currentlyChecking = true;
-    if (await network.testAuthorizedConnection(httpClient)) {
+    if (await httpClient.testAuthorizedConnection()) {
       var cachedMeta = await _cachedServerMeta;
       var serverMeta = await getServerMeta();
       if (serverMeta["competition"] != cachedMeta?["competition"]) {
@@ -312,7 +314,7 @@ class MyAppState extends ChangeNotifier {
     }
     bool serverFound = await compute(network.testUnauthorizedConnection, config.serverUrl ?? "https://example.com");
     if (!reconnecting) { // first time we connect, ensure we have a proper connection
-      bool serverAuthorized = await compute(network.testAuthorizedConnection, httpClient);
+      bool serverAuthorized = await httpClient.testAuthorizedConnection();
       if (serverFound && serverAuthorized) {
         log("Server found and authorized");
         scaffoldKey.currentState?.showSnackBar(const SnackBar(
@@ -492,7 +494,7 @@ class MyAppState extends ChangeNotifier {
       log("Connection not yet initialized, can't sync");
       return;
     }
-    if (!await compute(network.testAuthorizedConnection, httpClient)) {
+    if (!await httpClient.testAuthorizedConnection()) {
       log("Not authorized or not connected, can't sync");
       scaffoldKey.currentState?.showSnackBar(const SnackBar(
         content: Text("Not authorized or not connected to server, can't sync"),
@@ -539,8 +541,8 @@ class MyAppState extends ChangeNotifier {
     try { //1234567890
       Map<String, dynamic> toServer = builder!.allManagers.saveNetworkDeltas();
 //      await network.sendDeltas(httpClient, toServer);
-      await compute2(network.sendDeltas, httpClient, toServer);
-      Map<String, dynamic>? fromServer = await compute(network.getTeamData, httpClient);
+      await httpClient.sendDeltas(toServer);
+      Map<String, dynamic>? fromServer = await httpClient.getTeamData();
       builder!.allManagers.load(fromServer, false);
       scaffoldKey.currentState?.showSnackBar(const SnackBar(
         content: Text("Synced data with server"),
