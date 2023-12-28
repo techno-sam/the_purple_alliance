@@ -1,3 +1,4 @@
+import 'dart:developer';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -18,29 +19,24 @@ class ImageTile extends StatefulWidget {
 
 class _ImageTileState extends State<ImageTile> {
 
-  late Future<File> _imageFuture;
+  Future<File>? _imageFuture;
   final GlobalKey<State<FutureBuilder>> _imgKey = GlobalKey<State<FutureBuilder>>(debugLabel: "futureImage");
   final GlobalKey<State<FutureBuilder>> _imgKeyInner = GlobalKey<State<FutureBuilder>>(debugLabel: "futureImageInner");
-
-  @override
-  void initState() {
-    super.initState();
-    _imageFuture = getImageFile(widget.hash, quick: true).then((f) async {
-      while (!(await f.exists())) {
-        await Future.delayed(const Duration(milliseconds: 100));
-      }
-      return f;
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     var appState = context.watch<MyAppState>();
     var syncManager = appState.imageSyncManager;
+
+    _imageFuture ??= syncManager.getImageFile(widget.hash, quick: true).then((f) async {
+        while (!(await f.exists())) {
+          await Future.delayed(const Duration(milliseconds: 100));
+        }
+        return f;
+      });
     ImageRecord record = syncManager.knownImages.firstWhere((element) => element.uuid == widget.hash);
     String hash = record.uuid;
-    bool imageExists = syncManager.downloadedUUIDs.contains(hash);
     var placeholder = Icon(
         Icons.photo_outlined,
         size: 50,
@@ -50,17 +46,13 @@ class _ImageTileState extends State<ImageTile> {
     return Card(
         child: InkWell(
             onTap: () {
-              //log("tapped image ${widget.index}");
-              /*setState(() {
-                _showImg = !_showImg;
-              });*/
               if (syncManager.downloadedUUIDs.contains(hash)) {
                 Navigator.of(context).push(MaterialPageRoute(
                     builder: (context) {
                       return ImageDetailsPage(
                           heroTag: heroTag,
                           imgKeyInner: _imgKeyInner,
-                          imageFuture: _imageFuture,
+                          imageFuture: _imageFuture!,
                           placeholder: placeholder,
                           theme: theme,
                           record: record
@@ -79,8 +71,7 @@ class _ImageTileState extends State<ImageTile> {
               child: Hero(
                 tag: heroTag,
                 child: Center(
-                  child: (imageExists
-                      ? FutureBuilder(key: _imgKey, future: _imageFuture, builder: (context, snapshot) {
+                  child: FutureBuilder(key: _imgKey, future: _imageFuture!, builder: (context, snapshot) {
                     if (snapshot.data != null) {
                       return ClipRRect(
                           borderRadius: BorderRadius.circular(12),
@@ -89,7 +80,7 @@ class _ImageTileState extends State<ImageTile> {
                     } else {
                       return placeholder;
                     }
-                  }) : placeholder),
+                  }),
                 ),
               ),
             )

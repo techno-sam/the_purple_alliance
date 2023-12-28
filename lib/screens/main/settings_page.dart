@@ -198,8 +198,7 @@ class SettingsPage extends StatelessWidget {
                             TextButton(
                               onPressed: () async {
                                 Navigator.of(context).pop();
-                                appState.imageSyncManager.downloadedUUIDs.clear();
-                                appState.imageSyncManager.knownImages.clear();
+                                await appState.imageSyncManager.forceSync();
                               },
                               child: const Text("Confirm"),
                             ),

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:developer';
 import 'dart:io';
+import 'dart:isolate';
 
 import 'package:flutter/foundation.dart';
 import 'package:image/image.dart';
@@ -33,16 +34,6 @@ Future<String> getImagePath(String uuid, {bool quick = false}) async {
   return '$imagePath/$uuid.jpg';
 }
 
-Set<String> _nonExistentUUIDs = {};
-
-Future<File> getImageFile(String uuid, {bool quick = false}) async {
-  final file = File(await getImagePath(uuid, quick: quick));
-  if (!await file.exists()) {
-    _nonExistentUUIDs.add(uuid);
-  }
-  return file;
-}
-
 
 class ImageSyncManager extends ChangeNotifier {
   final List<Pair<String, ImageRecord>> _toCopy = []; // images needing to be copied from temp storage to permanent image cache don't write to disk (cache images may no longer exist)
@@ -51,16 +42,25 @@ class ImageSyncManager extends ChangeNotifier {
   final List<String> _toDownload = []; // just a list of hashes, metadata is not yet present (don't write to disk, dynamically determined)
   Set<String> _downloadedUUIDs = {}; // write to disk, this is what we already have
   final List<ImageRecord> _knownImages = []; // write to disk, this is a cached version of already synced stuff
-  late Connection Function() _getConnection;
-  late ImageSyncMode Function() _getMode;
-  late int? Function() _getSelectedTeam;
-  late bool Function() _isReady;
+  Connection Function() _getConnection;
+  final ImageSyncMode Function() _getMode;
+  final int? Function() _getSelectedTeam;
+  final bool Function() _isReady;
   Set<String> get downloadedUUIDs => _downloadedUUIDs;
   List<ImageRecord> get knownImages => _knownImages;
   Iterable<ImageRecord> get notDownloaded => _knownImages.where((element) => !_downloadedUUIDs.contains(element.uuid));
   List<String> _serverKnownUuids = []; // write to disk, otherwise upload buttons show up when the server already knows about stuff
 
   bool isKnown(String uuid) => _serverKnownUuids.contains(uuid);
+
+  Future<File> getImageFile(String uuid, {bool quick = false}) async {
+    final file = File(await getImagePath(uuid, quick: quick));
+    if (!file.existsSync()) {
+      //log("Removing non-existing id $uuid");
+      _downloadedUUIDs.remove(uuid);
+    }
+    return file;
+  }
 
   Future<void> remindUpload(String uuid) async {
     if (!isKnown(uuid)) {
@@ -80,11 +80,9 @@ class ImageSyncManager extends ChangeNotifier {
   late Timer _transferTimer;
   bool _alreadyTransferring = false;
 
-  ImageSyncManager(Connection Function() getConnection, ImageSyncMode Function() getMode, int? Function() getSelectedTeam, bool Function() isReady) {
-    _getConnection = getConnection;
-    _getMode = getMode;
-    _getSelectedTeam = getSelectedTeam;
-    _isReady = isReady;
+  ImageSyncManager(Connection Function() getConnection, ImageSyncMode Function() getMode,
+      int? Function() getSelectedTeam, bool Function() isReady):
+        _getConnection = getConnection, _getMode = getMode, _getSelectedTeam = getSelectedTeam, _isReady = isReady {
     _transferTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
       if (_alreadyTransferring) {
         return;
@@ -93,11 +91,6 @@ class ImageSyncManager extends ChangeNotifier {
         return;
       }
       _alreadyTransferring = true;
-      while (_nonExistentUUIDs.isNotEmpty) {
-        String nonExistentUUID = _nonExistentUUIDs.elementAt(0);
-        _nonExistentUUIDs.remove(nonExistentUUID);
-        _downloadedUUIDs.remove(nonExistentUUID);
-      }
       await runCopy();
       final connection = _getConnection();
       await runDownload(connection);
@@ -152,6 +145,7 @@ class ImageSyncManager extends ChangeNotifier {
       return;
     }
     int? teamNumber = _getSelectedTeam();
+    //log("\n\n\nAdd to download, mode=$mode\n\n\n\n");
     _toDownload.addAll(records.where((element) => mode == ImageSyncMode.all || element.team == teamNumber).map((element) => element.uuid));
   }
   
@@ -315,11 +309,7 @@ class ImageSyncManager extends ChangeNotifier {
           }
         }
       }
-      var toDownload = _knownImages.map((element) => element.uuid).toList();
-      for (String hash in _downloadedUUIDs) {
-        toDownload.remove(hash);
-      }
-      _toDownload.addAll(toDownload);
+      addToDownload(_knownImages.where((element) => !_downloadedUUIDs.contains(element.uuid)));
       var knownUuidsData = decoded['server_known_uuids'];
       if (knownUuidsData is List) {
         _serverKnownUuids = knownUuidsData.whereType<String>().toList();
@@ -347,5 +337,11 @@ class ImageSyncManager extends ChangeNotifier {
     });
     final file = await _dataFile;
     return await compute(file.writeAsString, data);
+  }
+
+  Future<void> forceSync() async {
+    downloadedUUIDs.clear();
+    knownImages.clear();
+    await runMetaDownload(_getConnection());
   }
 }

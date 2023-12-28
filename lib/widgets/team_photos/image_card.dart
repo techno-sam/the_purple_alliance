@@ -17,7 +17,7 @@ class ImageCard extends StatefulWidget {
 }
 
 class _ImageCardState extends State<ImageCard> {
-  late Future<File> _imageFuture;
+  Future<File>? _imageFuture;
   final GlobalKey<State<FutureBuilder>> _imgKey = GlobalKey<
       State<FutureBuilder>>(debugLabel: "futureImage");
   final GlobalKey<State<FutureBuilder>> _imgKeyInner = GlobalKey<
@@ -25,21 +25,18 @@ class _ImageCardState extends State<ImageCard> {
   final ScrollController _tagsController = ScrollController();
 
   @override
-  void initState() {
-    super.initState();
-    _imageFuture = getImageFile(widget.hash, quick: true).then((f) async {
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    var appState = context.watch<MyAppState>();
+    var syncManager = appState.imageSyncManager;
+
+    _imageFuture ??= syncManager.getImageFile(widget.hash, quick: true).then((f) async {
       while (!(await f.exists())) {
         await Future.delayed(const Duration(milliseconds: 100));
       }
       return f;
     });
-  }
 
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    var appState = context.watch<MyAppState>();
-    var syncManager = appState.imageSyncManager;
     ImageRecord record = syncManager.knownImages.firstWhere((element) =>
     element.uuid == widget.hash);
     String hash = record.uuid;
@@ -63,7 +60,7 @@ class _ImageCardState extends State<ImageCard> {
                     builder: (context) {
                       return ImageDetailsPage(heroTag: heroTag,
                           imgKeyInner: _imgKeyInner,
-                          imageFuture: _imageFuture,
+                          imageFuture: _imageFuture!,
                           placeholder: placeholder,
                           theme: theme,
                           record: record);
@@ -121,7 +118,7 @@ class _ImageCardState extends State<ImageCard> {
                       child: Center(
                         child: (imageExists
                             ? FutureBuilder(key: _imgKey,
-                            future: _imageFuture,
+                            future: _imageFuture!,
                             builder: (context, snapshot) {
                               if (snapshot.data != null) {
                                 return ClipRRect(

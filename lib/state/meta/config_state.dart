@@ -248,9 +248,9 @@ class ConfigState extends ChangeNotifier {
 
   Future<void> readConfig(Object key) async {
     _ensureAuthorized(key);
-    await _readConfig().then((jsonData) {
+    await _readConfig().then((jsonData) async {
       log("Read config $jsonData");
-      _setConfig(jsonData);
+      await _setConfig(jsonData);
     });
   }
 

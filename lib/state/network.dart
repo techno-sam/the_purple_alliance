@@ -204,13 +204,16 @@ class _LocalConnection implements Connection {
   late final ReceivePort _port;
   late final SendPort _sendPort;
   bool _closed = false;
+  bool _initialized = false;
 
   _LocalConnection(this.url, String username, String password):
-        _username = username, _password = password {
-    _initPorts();
-  }
+        _username = username, _password = password;
   
-  Future<Never> _initPorts() async {
+  Future<void> _initPorts() async {
+    if (_initialized) {
+      return;
+    }
+    _initialized = true;
     _port = ReceivePort('network handler');
     final receiveWrapper = _MultiFirstPortWrapper(_port);
     
@@ -219,7 +222,7 @@ class _LocalConnection implements Connection {
     
     _sendPort = await receiveWrapper.first;
     _sendPort.send(_Initializer(url: url, username: _username, password: _password));
-    await receiveWrapper.listen((message) async {
+    receiveWrapper.listen((message) async {
       if (message is _IsolatedReturn) {
         if (_requests.containsKey(message.id)) {
           _requests[message.id]!.complete(message.type.cast(message.ret));
@@ -230,12 +233,14 @@ class _LocalConnection implements Connection {
         log("Oops, got a message that wasn't a return: $message");
       }
     });
+    return;
   }
   
   Future<R> _callIsolated<T, R>(_CallType<T, R> type, T arg) async {
     if (_closed) {
       throw "Connection closed";
     }
+    await _initPorts();
     final int id = _requestId++;
     var result = Completer<R>();
     _requests[id] = result;
