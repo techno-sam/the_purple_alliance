@@ -10,12 +10,14 @@ class RankingsDialog extends StatelessWidget {
     required this.rankedTeams,
     required this.dataManagers,
     required this.appState,
-  });
+    required void Function() viewTeamPage,
+  }): _viewTeamPage = viewTeamPage;
 
   final ThemeData theme;
   final List<int> rankedTeams;
   final AllDataManagers dataManagers;
   final MyAppState appState;
+  final void Function() _viewTeamPage;
 
   @override
   Widget build(BuildContext context) {
@@ -42,7 +44,16 @@ class RankingsDialog extends StatelessWidget {
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 1.0, horizontal: 8.0),
                             child: Card(
-                              child: Padding(
+                              child: InkWell(
+                                onTap: () async {
+                                  appState.builder?.setTeam(rankedTeams[i]);
+                                  final nav = Navigator.of(context);
+                                  await Future.delayed(const Duration(milliseconds: 150));
+                                  _viewTeamPage();
+                                  nav.pop();
+                                },
+                                customBorder: theme.cardTheme.shape ?? const RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(12))), //match shape of card
+                                child: Padding(
                                   padding: const EdgeInsets.all(8.0),
                                   child: Row(
                                     children: [
@@ -59,6 +70,7 @@ class RankingsDialog extends StatelessWidget {
                                       Text(" ${dataManagers.getManager(rankedTeams[i]).getSearchRanking(appState.searchValues!).map((v, max) => '$v/$max')}")
                                     ],
                                   )
+                                ),
                               ),
                             ),
                           )

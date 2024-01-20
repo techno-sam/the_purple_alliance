@@ -8,6 +8,7 @@ import 'package:the_purple_alliance/state/data_values/abstract_data_value.dart';
 import 'package:the_purple_alliance/state/search_system.dart';
 import 'package:the_purple_alliance/state/team_specific_data_manager.dart';
 import 'package:the_purple_alliance/widgets/display_card.dart';
+import 'package:the_purple_alliance/widgets/scouting/builders/default_placeholder_builder.dart';
 import 'package:the_purple_alliance/widgets/scouting/json_builder_holder.dart';
 
 import 'builders/abstract_builder.dart';
@@ -18,6 +19,7 @@ import 'builders/photos_builder.dart';
 import 'builders/star_rating_builder.dart';
 import 'builders/text_builder.dart';
 import 'builders/text_field_builder.dart';
+import 'builders/win_loss_builder.dart';
 
 Map<String, JsonWidgetBuilder Function(Map<String, dynamic>)> widgetBuilders = {};
 
@@ -29,6 +31,7 @@ void initializeBuilders() {
   widgetBuilders["dropdown"] = DropdownWidgetBuilder.fromJson;
   widgetBuilders["star_rating"] = StarRatingWidgetBuilder.fromJson;
   widgetBuilders["comments"] = CommentsWidgetBuilder.fromJson;
+  widgetBuilders["win_loss"] = WinLossBuilder.fromJson;
   initializeValueHolders();
 }
 
@@ -47,7 +50,8 @@ JsonWidgetBuilder? loadBuilder(Map<String, dynamic> entry) {
     if (widgetBuilders.containsKey(type) && widgetBuilders[type] != null) {
       return widgetBuilders[type]!(entry);
     } else {
-      throw "Undefined type: $type in $entry";
+      log("Undefined type: $type in $entry, returning default builder");
+      return DefaultPlaceholderBuilder.fromJson(entry, type);
     }
   } else {
     throw "Missing type key in $entry";

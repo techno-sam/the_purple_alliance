@@ -40,8 +40,15 @@ class SearchFieldPickerDialog extends StatelessWidget {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Icon(builders[i].icon),
-                                  Text(builders[i].label)
+                                  Flexible(child: Icon(builders[i].icon)),
+                                  Flexible(
+                                    flex: 4,
+                                    child: Text(
+                                      builders[i].label,
+                                      overflow: TextOverflow.fade,
+                                      softWrap: true,
+                                    ),
+                                  )
                                 ],
                               ),
                             ),

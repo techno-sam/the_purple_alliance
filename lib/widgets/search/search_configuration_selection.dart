@@ -63,13 +63,20 @@ class SearchConfigurationSelection extends StatelessWidget {
               const SizedBox(width: 10),
               Tooltip(
                 message: "New",
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.pop(context, nameKey.currentState?.value);
-                  },
-                  icon: const Icon(Icons.add),
-                  label: getWindowType(context) >= AdaptiveWindowType.medium ? const Text("New") : const SizedBox(),
-                ),
+                child: getWindowType(context) >= AdaptiveWindowType.medium
+                    ? ElevatedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(context, nameKey.currentState?.value);
+                      },
+                      icon: const Icon(Icons.add),
+                      label: const Text("New"),
+                    )
+                    : ElevatedButton(
+                      onPressed: () {
+                        Navigator.pop(context, nameKey.currentState?.value);
+                      },
+                      child: const Icon(Icons.add)
+                    ),
               )
             ],
           ),

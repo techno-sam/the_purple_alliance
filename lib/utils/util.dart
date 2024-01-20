@@ -99,3 +99,21 @@ int generateTimestamp() {
 String makeUUID() {
   return const Uuid().v4().replaceAll("-", "").replaceAll("_", "");
 }
+
+extension All<T> on Iterable<T> {
+  bool all(bool Function(T) test) {
+    for (T element in this) {
+      if (!test(element)) return false;
+    }
+    return true;
+  }
+}
+
+extension EffectiveType<A, B> on Map<A, B> {
+  bool isEffectively<K, V>() {
+    if (K == A && V == B) {
+      return true;
+    }
+    return entries.all((e) => e.key is K && e.value is V);
+  }
+}

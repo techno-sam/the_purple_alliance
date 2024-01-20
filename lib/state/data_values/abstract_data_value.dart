@@ -1,3 +1,4 @@
+import 'package:the_purple_alliance/state/data_values/win_loss.dart';
 import 'package:the_purple_alliance/utils/util.dart';
 
 import 'comments.dart';
@@ -20,6 +21,7 @@ void initializeValueHolders() {
   _valueTypes[DropdownDataValue] = DropdownDataValue.new;
   _valueTypes[StarRatingDataValue] = _s(StarRatingDataValue.new);
   _valueTypes[CommentsDataValue] = _s(CommentsDataValue.new);
+  _valueTypes[WinLossDataValue] = _s(WinLossDataValue.new);
 }
 
 abstract class DataValue {

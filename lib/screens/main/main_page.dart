@@ -54,7 +54,11 @@ class _MainPageState extends State<MainPage> {
         }); //experiments
         break;
       case Pages.search:
-        page = const SearchPage();
+        page = SearchPage(() {
+          setState(() {
+            selectedIndex = Pages.editor.index;
+          });
+        });
         break;
       case Pages.settings:
         page = SettingsPage(); //settings

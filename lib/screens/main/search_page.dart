@@ -15,7 +15,9 @@ each data value emits a number of points for the current state and the total num
 if a data value wishes to be searchable, it must implement SearchDataEmitter
  */
 class SearchPage extends StatefulWidget {
-  const SearchPage({super.key});
+  const SearchPage(this._viewTeamPage, {super.key});
+
+  final void Function() _viewTeamPage;
 
   @override
   State<SearchPage> createState() => _SearchPageState();
@@ -136,7 +138,13 @@ class _SearchPageState extends State<SearchPage> {
                     //print(rankedTeams);
                     showDialog(context: context, builder: (context) {
                       final theme = Theme.of(context);
-                      return RankingsDialog(theme: theme, rankedTeams: rankedTeams, dataManagers: teamDataManager, appState: appState);
+                      return RankingsDialog(
+                        theme: theme,
+                        rankedTeams: rankedTeams,
+                        dataManagers: teamDataManager,
+                        appState: appState,
+                        viewTeamPage: widget._viewTeamPage
+                      );
                     });
                   }
                 },

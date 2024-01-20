@@ -81,6 +81,19 @@ class DropdownWidgetBuilder extends LabeledAndPaddedSynchronizedBuilder<Dropdown
                           ],
                         )
                     ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.pop(context);
+                        },
+                        icon: const Icon(Icons.check),
+                        label: const Text("Done")
+                      ),
+                    ],
+                  )
                 ],
               ),
             );
