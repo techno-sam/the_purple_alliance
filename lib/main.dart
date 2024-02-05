@@ -421,8 +421,10 @@ class MyAppState extends ChangeNotifier {
       });
     } else {
       log("At different competition, clearing previous data...");
-      imageSyncManager.clear(() => httpClient);
-      await imageSyncManager.save();
+      await imageSyncManager.withSyncLock(() async {
+        imageSyncManager.clear(() => httpClient);
+        await imageSyncManager.save();
+      });
     }
     if (checkedCompetition) {
       await _setCachedServerMeta(remoteServerMeta);

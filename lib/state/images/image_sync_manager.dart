@@ -83,7 +83,7 @@ class ImageSyncManager extends ChangeNotifier {
       int? Function() getSelectedTeam, bool Function() isReady):
         _getConnection = getConnection, _getMode = getMode, _getSelectedTeam = getSelectedTeam, _isReady = isReady {
     _transferTimer = Timer.periodic(const Duration(milliseconds: 500), (timer) async {
-      if (_alreadyTransferring) {
+      if (_alreadyTransferring) { // NOTE: there must not be any async calls between this and `'`_alreadyTransferring = true`
         return;
       }
       if (!_isReady()) {
@@ -103,7 +103,6 @@ class ImageSyncManager extends ChangeNotifier {
 
   void clear(Connection Function() getConnection) {
     _getConnection = getConnection;
-    _alreadyTransferring = true;
     _toCopy.clear();
     _copied.clear();
     _toUpload.clear();
@@ -342,5 +341,13 @@ class ImageSyncManager extends ChangeNotifier {
     downloadedUUIDs.clear();
     knownImages.clear();
     await runMetaDownload(_getConnection());
+  }
+
+  FutureOr<T> withSyncLock<T>(FutureOr<T> Function() callback) async {
+    bool currentState = _alreadyTransferring;
+    _alreadyTransferring = true;
+    FutureOr<T> result = callback();
+    _alreadyTransferring = currentState;
+    return result;
   }
 }
