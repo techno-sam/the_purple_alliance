@@ -1,0 +1,27 @@
+import 'dart:convert' show utf8;
+import 'package:crypto/crypto.dart' show sha1;
+
+const String licenseText = """The Purple Alliance is copyright (C) Samuel Wagenaar, 2023–2024
+
+The Purple Alliance (the “App”) is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with this program.  If not, see <http://www.gnu.org/licenses/>.
+
+
+The purpose of the App is the sharing of information within your own FIRST Robotics Team about the strategies and capabilities of other teams you may partner with at an ongoing competition.
+
+We hope you will find this App useful and that you will have fun at the competition. Please play nice including while using this App. Among other things, that means:
+
+Use of the App is for its intended purpose only.
+
+You are responsible for independently verifying that information you receive through the App is accurate. The authors and distributors of the App shall not be liable for inaccurate or misleading information you may receive through this App.
+
+You are solely responsible for the accuracy and appropriateness of information that you enter into this App. You agree to indemnify, hold harmless, and (upon the authors' or distributors' request) defend, the authors and distributors of the App for any liabilities resulting from your use of the App.
+
+You may not post copyrighted, defamatory, obscene, offensive, privileged, or otherwise restricted materials. The authors and distributors shall not be liable for any harm resulting from your encountering any such material while using the App.
+
+Any information you provide may be shared without limitation with other users. You should not provide any privacy-sensitive information through this App. Any information you provide may be stored in central servers that various teams may host. The authors and distributors of the App shall not be responsible for data retention and information security.""";
+
+final String licenseHash = sha1.convert(utf8.encode(licenseText)).toString();

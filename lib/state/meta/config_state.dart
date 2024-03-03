@@ -50,6 +50,8 @@ class ConfigState extends ChangeNotifier {
   String _username = "";
   String _password = "";
 
+  void Function()? goToSettingsPage;
+
   ConfigState({required this.reconnectCallback, required Object privateKey}) {
     _privateKey = privateKey;
   }
@@ -195,9 +197,9 @@ class ConfigState extends ChangeNotifier {
   }
 
   Future<void> _setConfig(Map<String, dynamic> jsonData) async {
-    log("Hello");
+    //log("Hello");
     if (jsonData["colorful_teams"] is bool) {
-      log("Reading colorful teams ${jsonData["colorful_teams"]}");
+      //log("Reading colorful teams ${jsonData["colorful_teams"]}");
       colorfulTeams = jsonData["colorful_teams"];
     }
     if (jsonData["team_color_reminder"] is bool) {
@@ -240,7 +242,11 @@ class ConfigState extends ChangeNotifier {
         notifyListeners();
         await reconnectCallback();
         log("Connected...");
+      } else {
+        goToSettingsPage?.call();
       }
+    } else {
+      goToSettingsPage?.call();
     }
     notifyListeners();
     unsavedChanges = false;

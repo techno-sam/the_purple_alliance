@@ -227,6 +227,18 @@ class SettingsPage extends StatelessWidget {
                     ),
                   ),
                 ),
+                const SizedBox(height: 20),
+                ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.push(context, MaterialPageRoute<void>(
+                        builder: (context) {
+                          return const LicensePage();
+                        }
+                    ));
+                  },
+                  icon: const Icon(Icons.text_snippet_outlined),
+                  label: const Text("View license information"),
+                ),
               ],
             ),
             const SizedBox(height: 2),

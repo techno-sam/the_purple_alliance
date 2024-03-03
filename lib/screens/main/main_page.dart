@@ -1,6 +1,7 @@
 import 'package:adaptive_breakpoints/adaptive_breakpoints.dart';
 import 'package:adaptive_navigation/adaptive_navigation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:the_purple_alliance/main.dart';
 import 'package:the_purple_alliance/navigation/color_adaptive_scaffold.dart';
@@ -32,10 +33,17 @@ class _MainPageState extends State<MainPage> {
 
   var selectedIndex = 0;
 
+  void _goToSettingsPage() {
+    setState(() {
+      selectedIndex = Pages.settings.index;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     var appState = context.watch<MyAppState>();
     var config = context.watch<ConfigState>();
+    config.goToSettingsPage = _goToSettingsPage;
     Widget page;
     Pages selectedPage = Pages.values[selectedIndex];
     switch (selectedPage) {
@@ -70,6 +78,7 @@ class _MainPageState extends State<MainPage> {
       onTap: () {
         //log("Tapped somewhere!");
         FocusManager.instance.primaryFocus?.unfocus();
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
       },
       child: ColorAdaptiveNavigationScaffold(
         body: Container(

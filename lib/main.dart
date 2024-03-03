@@ -6,8 +6,10 @@ import 'dart:io';
 import 'package:english_words/english_words.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:path_provider/path_provider.dart';
+import 'package:the_purple_alliance/screens/main/license_page.dart';
 
 import 'package:the_purple_alliance/screens/main/main_page.dart';
 import 'package:the_purple_alliance/state/images/image_sync_manager.dart';
@@ -38,6 +40,7 @@ class MyApp extends StatelessWidget {
   // This widget is the root of your application.
   @override
   Widget build(BuildContext context) {
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersive);
     return ChangeNotifierProvider(
         create: (context) => MyAppState(_scaffoldKey, _mainPageKey),
         child: ChangeNotifierProvider(
@@ -53,7 +56,7 @@ class MyApp extends StatelessWidget {
                   seedColor: Colors.purple,
                 ),
               ),
-              home: MainPage(key: _mainPageKey),
+              home: MyLicensePage(redirectTo: MainPage(key: _mainPageKey)),
             ),
           ),
         )
